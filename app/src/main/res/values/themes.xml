@@ -1,0 +1,8 @@
+<resources>
+    <!-- Base application theme used for window backgrounds prior to Compose init -->
+    <style name="Theme.Cypher" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#0D0F14</item>
+        <item name="android:navigationBarColor">#0D0F14</item>
+        <item name="android:windowBackground">#0D0F14</item>
+    </style>
+</resources>

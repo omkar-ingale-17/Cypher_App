@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Cypher</string>
+    <string name="notification_listener_label">Cypher Notification Listener</string>
+    <string name="accessibility_service_label">Cypher Accessibility Service</string>
+</resources>

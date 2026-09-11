@@ -1,0 +1,72 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+build/
+app/build/
+**/build/
+.gradle/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Proguard / R8 output
+proguard/
+**/proguard/
+
+# Log files
+*.log
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea/libraries/
+.idea/caches/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/deploymentTargetSelector.xml
+
+# CMake / NDK builds
+.cxx/
+**/default/debug/
+**/default/release/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Signing files / Keys (Never commit keystores!)
+*.jks
+*.keystore
+*.p12
+*.key
+signing.properties
+
+# Android profiling / Memory dumps
+captures/
+*.hprof
+
+# Kotlin / KSP cache
+.kotlin/
+.ksp/
