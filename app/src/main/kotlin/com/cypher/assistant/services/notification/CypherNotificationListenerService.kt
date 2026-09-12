@@ -4,10 +4,10 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 
 /**
- * Notification Listener Service — STUB.
+ * Notification Listener Service - STUB.
  *
  * Declared in AndroidManifest.xml.
- * Requires user to grant access in: Settings → Apps → Special App Access → Notification Access.
+ * Requires user to grant access in: Settings -> Apps -> Special App Access -> Notification Access.
  *
  * Full implementation: Stage 12 (Notification feature module).
  *

@@ -4,7 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
 
 /**
- * Cypher Accessibility Service — STUB.
+ * Cypher Accessibility Service - STUB.
  *
  * Declared in AndroidManifest.xml for Stage 1 structure.
  * Full implementation will be completed in Stage 15 (Accessibility Service: screen reading, UI automation).

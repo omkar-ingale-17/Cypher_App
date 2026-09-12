@@ -12,7 +12,7 @@ import javax.inject.Singleton
 /**
  * Repository for persisting and querying command history.
  *
- * Hides the DAO from the ViewModel and use-case layers — only this class
+ * Hides the DAO from the ViewModel and use-case layers - only this class
  * knows about the database schema.
  */
 @Singleton
@@ -24,8 +24,8 @@ class CommandHistoryRepository @Inject constructor(
         dao.observeRecent(Constants.MAX_COMMAND_HISTORY)
 
     /**
-     * Persists a command→result pair and trims history to [Constants.MAX_COMMAND_HISTORY].
-     * Safe to call from any coroutine context — Room handles the IO dispatch.
+     * Persists a command->result pair and trims history to [Constants.MAX_COMMAND_HISTORY].
+     * Safe to call from any coroutine context - Room handles the IO dispatch.
      */
     suspend fun record(intent: CommandIntent, result: CommandResult) {
         dao.insert(

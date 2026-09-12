@@ -28,9 +28,10 @@ data class VoiceUiState(
     val voiceState: VoiceState = VoiceState.IDLE,
     val liveTranscript: String = "",
     val lastResponse: String = "",
-    val statusMessage: String = "Say \"Cypher\" or tap the mic",
+    val statusMessage: String = "Tap mic to speak or say Cypher",
     val rmsLevel: Float = 0f,
     val isSettingsSheetOpen: Boolean = false,
+    val isOnboardingOpen: Boolean = false,
     val errorMessage: String? = null,
     val userPreferences: UserPreferences = UserPreferences(),
     val availableVoices: List<VoiceInfo> = emptyList(),
@@ -69,10 +70,12 @@ class VoiceViewModel @Inject constructor(
                 voiceEngine.rmsLevel
             ) { state, transcript, response, rms ->
                 val statusText = when (state) {
-                    VoiceState.IDLE -> if (response.isNotBlank()) response else "Say \"Cypher\" or tap the mic"
-                    VoiceState.LISTENING -> "Listening…"
-                    VoiceState.PROCESSING -> "Processing command…"
-                    VoiceState.SPEAKING -> "Speaking response…"
+                    VoiceState.IDLE -> "Tap mic to speak or say Cypher"
+                    VoiceState.LISTENING_FOR_WAKE_WORD -> "Listening for wake word..."
+                    VoiceState.WAKE_WORD_DETECTED -> "Wake word detected"
+                    VoiceState.LISTENING_FOR_COMMAND -> "Listening... Speak now"
+                    VoiceState.PROCESSING -> "Processing command..."
+                    VoiceState.SPEAKING -> "Speaking response..."
                     VoiceState.ERROR -> "Voice error occurred"
                 }
 
@@ -110,7 +113,12 @@ class VoiceViewModel @Inject constructor(
     private fun observePreferences() {
         viewModelScope.launch {
             preferencesDataStore.userPreferences.collect { prefs ->
-                _uiState.update { it.copy(userPreferences = prefs) }
+                _uiState.update {
+                    it.copy(
+                        userPreferences = prefs,
+                        isOnboardingOpen = !prefs.onboardingComplete && prefs.userName == "Commander"
+                    )
+                }
 
                 // Apply preferences to voice engine
                 if (prefs.selectedLanguageTag != "default") {
@@ -126,6 +134,16 @@ class VoiceViewModel @Inject constructor(
         }
     }
 
+    fun startStandbyListening() {
+        val prefs = _uiState.value.userPreferences
+        if (prefs.wakeWordEnabled && _uiState.value.voiceState == VoiceState.IDLE) {
+            voiceEngine.startListening(
+                continuous = prefs.continuousListening,
+                requireWakePhrase = true
+            )
+        }
+    }
+
     fun onMicTapped(hasMicrophonePermission: Boolean) {
         if (!hasMicrophonePermission) {
             _uiState.update {
@@ -138,22 +156,19 @@ class VoiceViewModel @Inject constructor(
         }
 
         when (_uiState.value.voiceState) {
-            VoiceState.LISTENING -> {
-                voiceEngine.stopListening()
-            }
-            VoiceState.SPEAKING -> {
-                voiceEngine.cancel()
-            }
-            VoiceState.PROCESSING -> {
-                voiceEngine.cancel()
-            }
+            VoiceState.LISTENING_FOR_WAKE_WORD,
             VoiceState.IDLE,
             VoiceState.ERROR -> {
-                val prefs = _uiState.value.userPreferences
-                voiceEngine.startListening(
-                    continuous = prefs.continuousListening,
-                    requireWakePhrase = false // Direct tap starts active listening immediately
-                )
+                // Manual tap immediately starts Stage 2 (command listening)
+                voiceEngine.startCommandListening()
+            }
+            VoiceState.LISTENING_FOR_COMMAND -> {
+                voiceEngine.stopListening()
+            }
+            VoiceState.SPEAKING,
+            VoiceState.PROCESSING,
+            VoiceState.WAKE_WORD_DETECTED -> {
+                voiceEngine.cancel()
             }
         }
     }
@@ -169,6 +184,21 @@ class VoiceViewModel @Inject constructor(
 
     fun closeSettingsSheet() {
         _uiState.update { it.copy(isSettingsSheetOpen = false) }
+    }
+
+    fun onSetUserName(name: String) {
+        viewModelScope.launch {
+            preferencesDataStore.setUserName(name)
+            preferencesDataStore.setOnboardingComplete(true)
+            _uiState.update { it.copy(isOnboardingOpen = false) }
+        }
+    }
+
+    fun onDismissOnboarding() {
+        viewModelScope.launch {
+            preferencesDataStore.setOnboardingComplete(true)
+            _uiState.update { it.copy(isOnboardingOpen = false) }
+        }
     }
 
     fun onLanguageSelected(locale: Locale) {
@@ -208,6 +238,11 @@ class VoiceViewModel @Inject constructor(
     fun onToggleWakeWord(enabled: Boolean) {
         viewModelScope.launch {
             preferencesDataStore.setWakeWordEnabled(enabled)
+            if (enabled) {
+                startStandbyListening()
+            } else if (_uiState.value.voiceState == VoiceState.LISTENING_FOR_WAKE_WORD) {
+                voiceEngine.stopListening()
+            }
         }
     }
 

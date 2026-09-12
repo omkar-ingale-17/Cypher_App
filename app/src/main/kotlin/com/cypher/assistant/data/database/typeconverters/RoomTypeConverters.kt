@@ -6,7 +6,7 @@ import com.cypher.assistant.core.command.CommandSource
 
 /**
  * Room type converters for enum fields in database entities.
- * Stores enums as their string name — safe across renames only if DB migration is handled.
+ * Stores enums as their string name - safe across renames only if DB migration is handled.
  */
 class RoomTypeConverters {
 

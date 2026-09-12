@@ -1,17 +1,24 @@
 package com.cypher.assistant.core.voice
 
 /**
- * High-level operational states of the Cypher Voice Engine.
+ * Operational states of the Cypher Voice Engine reflecting a two-stage voice pipeline:
  *
- * State flow:
- * IDLE → (tap mic / wake phrase) → LISTENING → (speech detected) → PROCESSING
- * → (command executed) → SPEAKING → (speech finished) → IDLE (or LISTENING if continuous)
+ * STAGE 1: Wake-word listening
+ * - IDLE
+ * - LISTENING_FOR_WAKE_WORD
+ * - WAKE_WORD_DETECTED
  *
- * Any unexpected error transitions to ERROR with a user-friendly message.
+ * STAGE 2: Command listening & execution
+ * - LISTENING_FOR_COMMAND
+ * - PROCESSING
+ * - SPEAKING
+ * - ERROR
  */
 enum class VoiceState {
     IDLE,
-    LISTENING,
+    LISTENING_FOR_WAKE_WORD,
+    WAKE_WORD_DETECTED,
+    LISTENING_FOR_COMMAND,
     PROCESSING,
     SPEAKING,
     ERROR

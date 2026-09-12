@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.sp
 val CypherFontFamily = FontFamily.Default
 
 val CypherTypography = Typography(
-    // ── Display — used for the main "CYPHER" logo header ───────────────────
+    // -- Display - used for the main "CYPHER" logo header -------------------
     displayLarge = TextStyle(
         fontFamily  = CypherFontFamily,
         fontWeight  = FontWeight.Bold,
@@ -22,7 +22,7 @@ val CypherTypography = Typography(
         letterSpacing = 6.sp
     ),
 
-    // ── Headline — screen titles ───────────────────────────────────────────
+    // -- Headline - screen titles -------------------------------------------
     headlineLarge = TextStyle(
         fontFamily  = CypherFontFamily,
         fontWeight  = FontWeight.SemiBold,
@@ -38,7 +38,7 @@ val CypherTypography = Typography(
         letterSpacing = 0.sp
     ),
 
-    // ── Body ──────────────────────────────────────────────────────────────
+    // -- Body --------------------------------------------------------------
     bodyLarge = TextStyle(
         fontFamily  = CypherFontFamily,
         fontWeight  = FontWeight.Normal,
@@ -61,7 +61,7 @@ val CypherTypography = Typography(
         letterSpacing = 0.4.sp
     ),
 
-    // ── Label ─────────────────────────────────────────────────────────────
+    // -- Label -------------------------------------------------------------
     labelLarge = TextStyle(
         fontFamily  = CypherFontFamily,
         fontWeight  = FontWeight.Medium,

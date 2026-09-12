@@ -3,12 +3,12 @@ package com.cypher.assistant.core.command
 /**
  * The central command contract exchanged between every layer of Cypher.
  *
- * Produced by the NLU/parser layer and consumed by [CommandRouter] → [CommandHandler].
+ * Produced by the NLU/parser layer and consumed by [CommandRouter] -> [CommandHandler].
  *
  * @param intentType            The resolved intent category.
  * @param parameters            Feature-specific key/value pairs.
  *                              Keys are defined in [com.cypher.assistant.core.common.Constants.Params].
- * @param confidence            NLU confidence score (0.0–1.0). Values below 0.4 should be rejected.
+ * @param confidence            NLU confidence score (0.0-1.0). Values below 0.4 should be rejected.
  * @param requiresConfirmation  If true, the UI must ask the user to confirm before executing.
  * @param source                Origin of the command (voice, text, shortcut, etc.).
  * @param rawText               The original unprocessed user utterance.

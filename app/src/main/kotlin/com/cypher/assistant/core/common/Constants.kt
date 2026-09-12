@@ -3,26 +3,26 @@ package com.cypher.assistant.core.common
 object Constants {
     const val APP_NAME = "Cypher"
 
-    // ── Database ──────────────────────────────────────────────────────────────
+    // -- Database --------------------------------------------------------------
     const val DATABASE_NAME       = "cypher_database"
     const val DATASTORE_NAME      = "cypher_preferences"
 
-    // ── NLU confidence thresholds ─────────────────────────────────────────────
+    // -- NLU confidence thresholds ---------------------------------------------
     const val CONFIDENCE_HIGH     = 0.85f
     const val CONFIDENCE_MEDIUM   = 0.60f
     const val CONFIDENCE_LOW      = 0.40f
 
-    // ── TTS ───────────────────────────────────────────────────────────────────
+    // -- TTS -------------------------------------------------------------------
     const val TTS_UTTERANCE_PREFIX = "cypher_"
 
-    // ── History ───────────────────────────────────────────────────────────────
+    // -- History ---------------------------------------------------------------
     const val MAX_COMMAND_HISTORY = 100
 
-    // ── Notification channel IDs ──────────────────────────────────────────────
+    // -- Notification channel IDs ----------------------------------------------
     const val NOTIF_CHANNEL_VOICE   = "cypher_voice_service"
     const val NOTIF_CHANNEL_GENERAL = "cypher_general"
 
-    // ── Intent parameter keys (used by CommandIntent.parameters map) ──────────
+    // -- Intent parameter keys (used by CommandIntent.parameters map) ----------
     object Params {
         const val APP_NAME         = "app_name"
         const val APP_PACKAGE      = "app_package"

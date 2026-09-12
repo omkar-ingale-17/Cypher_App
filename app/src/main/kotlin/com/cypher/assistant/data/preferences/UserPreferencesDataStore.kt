@@ -27,6 +27,7 @@ class UserPreferencesDataStore @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private object Keys {
+        val USER_NAME               = stringPreferencesKey("user_name")
         val TTS_ENABLED             = booleanPreferencesKey("tts_enabled")
         val TTS_SPEECH_RATE         = floatPreferencesKey("tts_speech_rate")
         val TTS_PITCH               = floatPreferencesKey("tts_pitch")
@@ -46,6 +47,7 @@ class UserPreferencesDataStore @Inject constructor(
         }
         .map { prefs ->
             UserPreferences(
+                userName            = prefs[Keys.USER_NAME]             ?: "Commander",
                 ttsEnabled          = prefs[Keys.TTS_ENABLED]           ?: true,
                 ttsSpeechRate       = prefs[Keys.TTS_SPEECH_RATE]       ?: 1.0f,
                 ttsPitch            = prefs[Keys.TTS_PITCH]             ?: 1.0f,
@@ -59,6 +61,9 @@ class UserPreferencesDataStore @Inject constructor(
                 onboardingComplete  = prefs[Keys.ONBOARDING_COMPLETE]   ?: false
             )
         }
+
+    suspend fun setUserName(name: String) =
+        context.dataStore.edit { it[Keys.USER_NAME] = name.trim() }
 
     suspend fun setTtsEnabled(enabled: Boolean) =
         context.dataStore.edit { it[Keys.TTS_ENABLED] = enabled }
@@ -95,6 +100,7 @@ class UserPreferencesDataStore @Inject constructor(
 }
 
 data class UserPreferences(
+    val userName: String              = "Commander",
     val ttsEnabled: Boolean           = true,
     val ttsSpeechRate: Float          = 1.0f,
     val ttsPitch: Float               = 1.0f,

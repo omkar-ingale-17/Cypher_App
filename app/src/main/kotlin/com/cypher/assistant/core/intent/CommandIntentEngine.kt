@@ -17,7 +17,58 @@ import javax.inject.Singleton
 class CommandIntentEngine @Inject constructor() {
 
     private val intentMatchers: List<IntentMatcher> = listOf(
-        // ── Apps ─────────────────────────────────────────────────────────────
+        // -- Conversational & Persona ------------------------------------------
+        IntentMatcher(
+            type = CommandIntentType.GREETING,
+            patterns = listOf(
+                Regex("""^(?:hello|hi|hey|greetings|good\s+morning|good\s+afternoon|good\s+evening|namaste|howdy)(?:\s+cypher)?$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.ASSISTANT_NAME,
+            patterns = listOf(
+                Regex("""^(?:what\s+is\s+your\s+name|what\'?s\s+your\s+name|who\s+are\s+you|tell\s+me\s+your\s+name)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.ASSISTANT_STATUS,
+            patterns = listOf(
+                Regex("""^(?:how\s+are\s+you|how\s+are\s+you\s+doing|how\'?s\s+it\s+going|how\s+do\s+you\s+do|are\s+you\s+okay|how\s+is\s+everything)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.ASSISTANT_CAPABILITIES,
+            patterns = listOf(
+                Regex("""^(?:what\s+can\s+you\s+do|help|what\s+are\s+your\s+features|what\s+do\s+you\s+do|show\s+help|capabilities)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.SET_USER_NAME,
+            patterns = listOf(
+                Regex("""^(?:my\s+name\s+is|call\s+me|i\s+am)\s+([a-zA-Z\s]+)$""", RegexOption.IGNORE_CASE)
+            ),
+            paramExtractor = { match -> mapOf("name" to match.groupValues[1].trim()) }
+        ),
+        IntentMatcher(
+            type = CommandIntentType.GET_USER_NAME,
+            patterns = listOf(
+                Regex("""^(?:what\s+is\s+my\s+name|what\'?s\s+my\s+name|who\s+am\s+i|do\s+you\s+know\s+my\s+name)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.THANK_YOU,
+            patterns = listOf(
+                Regex("""^(?:thank\s+you|thanks|thank\s+you\s+so\s+much|thanks\s+a\s+lot|thanks\s+cypher)(?:\s+cypher)?$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.GOODBYE,
+            patterns = listOf(
+                Regex("""^(?:goodbye|bye|bye\s+bye|see\s+you|see\s+you\s+later|exit|quit|sleep)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+
+        // -- Apps -------------------------------------------------------------
         IntentMatcher(
             type = CommandIntentType.OPEN_APP,
             patterns = listOf(
@@ -29,12 +80,12 @@ class CommandIntentEngine @Inject constructor() {
         IntentMatcher(
             type = CommandIntentType.CLOSE_APP,
             patterns = listOf(
-                Regex("""^(?:close|quit|exit|kill)\s+(?:the\s+)?(.+)$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:close|kill)\s+(?:the\s+)?(.+)$""", RegexOption.IGNORE_CASE)
             ),
             paramExtractor = { match -> mapOf("app_name" to match.groupValues[1].trim()) }
         ),
 
-        // ── Phone / Call ─────────────────────────────────────────────────────
+        // -- Phone / Call -----------------------------------------------------
         IntentMatcher(
             type = CommandIntentType.CALL_CONTACT,
             patterns = listOf(
@@ -57,7 +108,7 @@ class CommandIntentEngine @Inject constructor() {
             )
         ),
 
-        // ── SMS ──────────────────────────────────────────────────────────────
+        // -- SMS --------------------------------------------------------------
         IntentMatcher(
             type = CommandIntentType.SEND_SMS,
             patterns = listOf(
@@ -74,7 +125,7 @@ class CommandIntentEngine @Inject constructor() {
             }
         ),
 
-        // ── YouTube ──────────────────────────────────────────────────────────
+        // -- YouTube ----------------------------------------------------------
         IntentMatcher(
             type = CommandIntentType.YOUTUBE_PLAY,
             patterns = listOf(
@@ -92,7 +143,7 @@ class CommandIntentEngine @Inject constructor() {
             paramExtractor = { match -> mapOf("query" to match.groupValues[1].trim()) }
         ),
 
-        // ── Media Playback ───────────────────────────────────────────────────
+        // -- Media Playback ---------------------------------------------------
         IntentMatcher(
             type = CommandIntentType.MEDIA_PLAY,
             patterns = listOf(
@@ -124,7 +175,7 @@ class CommandIntentEngine @Inject constructor() {
             )
         ),
 
-        // ── Volume Control ───────────────────────────────────────────────────
+        // -- Volume Control ---------------------------------------------------
         IntentMatcher(
             type = CommandIntentType.VOLUME_UP,
             patterns = listOf(
@@ -144,7 +195,7 @@ class CommandIntentEngine @Inject constructor() {
             )
         ),
 
-        // ── Quick Settings / System ──────────────────────────────────────────
+        // -- Quick Settings / System ------------------------------------------
         IntentMatcher(
             type = CommandIntentType.OPEN_SETTINGS,
             patterns = listOf(
@@ -179,7 +230,7 @@ class CommandIntentEngine @Inject constructor() {
             )
         ),
 
-        // ── Web Search ───────────────────────────────────────────────────────
+        // -- Web Search -------------------------------------------------------
         IntentMatcher(
             type = CommandIntentType.WEB_SEARCH,
             patterns = listOf(

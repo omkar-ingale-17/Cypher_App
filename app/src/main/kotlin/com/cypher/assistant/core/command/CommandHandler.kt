@@ -10,7 +10,7 @@ package com.cypher.assistant.core.command
  *    @Binds @IntoSet
  *    abstract fun bindAppHandler(impl: AppHandler): CommandHandler
  *    ```
- * 3. The [CommandRouter] will automatically pick it up — no changes needed there.
+ * 3. The [CommandRouter] will automatically pick it up - no changes needed there.
  *
  * ## Threading
  * [handle] is a suspend function. Implementations should:
@@ -29,7 +29,7 @@ interface CommandHandler {
      * Execute [intent] and return a [CommandResult] whose [CommandResult.message]
      * will be read aloud by the TTS engine.
      *
-     * This function must never throw — catch all exceptions internally and return
+     * This function must never throw - catch all exceptions internally and return
      * [CommandResult.failure] instead.
      */
     suspend fun handle(intent: CommandIntent): CommandResult

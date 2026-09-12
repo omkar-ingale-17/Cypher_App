@@ -13,7 +13,7 @@ import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * Single-activity host for all Compose navigation.
- * Future screens are added as Composable destinations — no new Activities needed.
+ * Future screens are added as Composable destinations - no new Activities needed.
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {

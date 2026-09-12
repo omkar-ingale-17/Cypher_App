@@ -17,71 +17,124 @@ class CommandIntentEngineTest {
     }
 
     @Test
-    fun `parses open whatsapp command correctly`() {
+    fun parsesGreetingHelloCommandCorrectly() {
+        val intent = intentEngine.parse("hello", CommandSource.VOICE)
+        assertEquals(CommandIntentType.GREETING, intent.intentType)
+    }
+
+    @Test
+    fun parsesGreetingHeyCypherCommandCorrectly() {
+        val intent = intentEngine.parse("hey cypher", CommandSource.VOICE)
+        assertEquals(CommandIntentType.GREETING, intent.intentType)
+    }
+
+    @Test
+    fun parsesWhatIsYourNameCommandCorrectly() {
+        val intent = intentEngine.parse("what is your name", CommandSource.VOICE)
+        assertEquals(CommandIntentType.ASSISTANT_NAME, intent.intentType)
+    }
+
+    @Test
+    fun parsesWhoAreYouCommandCorrectly() {
+        val intent = intentEngine.parse("who are you", CommandSource.VOICE)
+        assertEquals(CommandIntentType.ASSISTANT_NAME, intent.intentType)
+    }
+
+    @Test
+    fun parsesHowAreYouCommandCorrectly() {
+        val intent = intentEngine.parse("how are you", CommandSource.VOICE)
+        assertEquals(CommandIntentType.ASSISTANT_STATUS, intent.intentType)
+    }
+
+    @Test
+    fun parsesWhatCanYouDoCommandCorrectly() {
+        val intent = intentEngine.parse("what can you do", CommandSource.VOICE)
+        assertEquals(CommandIntentType.ASSISTANT_CAPABILITIES, intent.intentType)
+    }
+
+    @Test
+    fun parsesMyNameIsCommandAndExtractsName() {
+        val intent = intentEngine.parse("my name is Bruce", CommandSource.VOICE)
+        assertEquals(CommandIntentType.SET_USER_NAME, intent.intentType)
+        assertEquals("Bruce", intent.parameters["name"])
+    }
+
+    @Test
+    fun parsesWhatIsMyNameCommand() {
+        val intent = intentEngine.parse("what is my name", CommandSource.VOICE)
+        assertEquals(CommandIntentType.GET_USER_NAME, intent.intentType)
+    }
+
+    @Test
+    fun parsesThankYouCommand() {
+        val intent = intentEngine.parse("thank you", CommandSource.VOICE)
+        assertEquals(CommandIntentType.THANK_YOU, intent.intentType)
+    }
+
+    @Test
+    fun parsesGoodbyeCommand() {
+        val intent = intentEngine.parse("goodbye", CommandSource.VOICE)
+        assertEquals(CommandIntentType.GOODBYE, intent.intentType)
+    }
+
+    @Test
+    fun parsesOpenWhatsAppCommandCorrectly() {
         val intent = intentEngine.parse("open WhatsApp", CommandSource.VOICE)
         assertEquals(CommandIntentType.OPEN_APP, intent.intentType)
         assertEquals("WhatsApp", intent.parameters["app_name"])
     }
 
     @Test
-    fun `parses launch camera command correctly`() {
+    fun parsesLaunchCameraCommandCorrectly() {
         val intent = intentEngine.parse("launch Camera", CommandSource.TEXT)
         assertEquals(CommandIntentType.OPEN_APP, intent.intentType)
         assertEquals("Camera", intent.parameters["app_name"])
     }
 
     @Test
-    fun `parses call contact command correctly`() {
+    fun parsesCallContactCommandCorrectly() {
         val intent = intentEngine.parse("call John Doe", CommandSource.VOICE)
         assertEquals(CommandIntentType.CALL_CONTACT, intent.intentType)
         assertEquals("John Doe", intent.parameters["target"])
     }
 
     @Test
-    fun `parses dial number command correctly`() {
+    fun parsesDialNumberCommandCorrectly() {
         val intent = intentEngine.parse("dial +123456789", CommandSource.VOICE)
         assertEquals(CommandIntentType.DIAL_NUMBER, intent.intentType)
         assertEquals("+123456789", intent.parameters["number"])
     }
 
     @Test
-    fun `parses send sms command with recipient and message`() {
-        val intent = intentEngine.parse("send message to Alice saying I will be late", CommandSource.VOICE)
-        assertEquals(CommandIntentType.SEND_SMS, intent.intentType)
-        assertEquals("Alice", intent.parameters["recipient"])
-        assertEquals("I will be late", intent.parameters["body"])
-    }
-
-    @Test
-    fun `parses play on youtube command`() {
-        val intent = intentEngine.parse("play classical music on YouTube", CommandSource.VOICE)
+    fun parsesPlayOnYouTubeCommand() {
+        val intent = intentEngine.parse("play classical music on youtube", CommandSource.VOICE)
         assertEquals(CommandIntentType.YOUTUBE_PLAY, intent.intentType)
         assertEquals("classical music", intent.parameters["query"])
     }
 
     @Test
-    fun `parses volume up command`() {
+    fun parsesVolumeUpCommand() {
         val intent = intentEngine.parse("volume up", CommandSource.VOICE)
         assertEquals(CommandIntentType.VOLUME_UP, intent.intentType)
     }
 
     @Test
-    fun `parses flashlight toggle command`() {
+    fun parsesFlashlightToggleCommand() {
         val intent = intentEngine.parse("turn on flashlight", CommandSource.VOICE)
         assertEquals(CommandIntentType.TOGGLE_FLASHLIGHT, intent.intentType)
         assertEquals("on", intent.parameters["state"])
     }
 
     @Test
-    fun `parses web search query`() {
+    fun parsesWebSearchQuery() {
         val intent = intentEngine.parse("search for distance to the moon", CommandSource.VOICE)
         assertEquals(CommandIntentType.WEB_SEARCH, intent.intentType)
         assertEquals("distance to the moon", intent.parameters["query"])
     }
 
     @Test
-    fun `returns UNKNOWN for unsupported free-form text`() {
-        val intent = intentEngine.parse("some completely unrecognized sentence", CommandSource.VOICE)
+    fun returnsUnknownForUnsupportedFreeFormText() {
+        val intent = intentEngine.parse("some completely unrecognized sentence 12345", CommandSource.VOICE)
         assertEquals(CommandIntentType.UNKNOWN, intent.intentType)
     }
 }

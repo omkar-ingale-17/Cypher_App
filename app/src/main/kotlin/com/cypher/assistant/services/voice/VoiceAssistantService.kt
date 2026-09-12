@@ -28,23 +28,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-private const val TAG = "VoiceAssistantService"
+private const val TAG = "CypherVoiceService"
 private const val NOTIFICATION_ID = 1001
-private const val CHANNEL_ID = "cypher_voice_channel"
+private const val CHANNEL_ID = "cypher_voice_assistant_channel"
 
 /**
- * Foreground Service hosting continuous background voice activation where Android rules permit.
- *
- * ## Android Background Execution Rules & Reality:
- * - Starting in Android 14 (API 34), microphone usage in the background requires a foreground
- *   service explicitly typed with `FOREGROUND_SERVICE_MICROPHONE` and a visible ongoing notification.
- * - Android actively restricts background audio recording:
- *     1. If another app requests AUDIOFOCUS_GAIN (e.g., incoming phone call, camera video recording),
- *        the system pauses or mutes background recording.
- *     2. Doze mode and OEM battery optimizations will throttle background loops unless the app
- *        is whitelisted by the user in battery optimization settings.
- * - This service adheres to these platform constraints by properly managing audio focus,
- *   handling interruptions gracefully, and releasing audio resources immediately on service stop.
+ * Foreground Service for background wake-word detection and voice interaction.
  */
 @AndroidEntryPoint
 class VoiceAssistantService : Service(), AudioManager.OnAudioFocusChangeListener {
@@ -73,7 +62,8 @@ class VoiceAssistantService : Service(), AudioManager.OnAudioFocusChangeListener
                 stopForegroundService()
                 return START_NOT_STICKY
             }
-            ACTION_PAUSE_LISTENING -> {
+            ACTION_PAUSE_LISTENING,
+            ACTION_STOP_LISTENING -> {
                 voiceEngine.stopListening()
             }
             ACTION_START_LISTENING -> {
@@ -88,7 +78,7 @@ class VoiceAssistantService : Service(), AudioManager.OnAudioFocusChangeListener
     }
 
     private fun startForegroundWithNotification() {
-        val notification = buildNotification(voiceStateText = "Listening for 'Cypher'…")
+        val notification = buildNotification(voiceStateText = "Listening for 'Cypher'...")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -119,11 +109,13 @@ class VoiceAssistantService : Service(), AudioManager.OnAudioFocusChangeListener
         serviceScope.launch {
             voiceEngine.voiceState.collect { state ->
                 val stateDesc = when (state) {
-                    VoiceState.IDLE -> "Standby — Say 'Cypher'"
-                    VoiceState.LISTENING -> "Listening for speech…"
-                    VoiceState.PROCESSING -> "Processing command…"
-                    VoiceState.SPEAKING -> "Speaking response…"
-                    VoiceState.ERROR -> "Microphone error"
+                    VoiceState.IDLE -> "Standby - Tap mic or say 'Cypher'"
+                    VoiceState.LISTENING_FOR_WAKE_WORD -> "Listening for wake word ('Cypher', 'Jaan', 'Baby')..."
+                    VoiceState.WAKE_WORD_DETECTED -> "Wake word detected!"
+                    VoiceState.LISTENING_FOR_COMMAND -> "Listening for command..."
+                    VoiceState.PROCESSING -> "Processing command..."
+                    VoiceState.SPEAKING -> "Speaking response..."
+                    VoiceState.ERROR -> "Voice assistant error"
                 }
                 updateNotification(stateDesc)
             }
@@ -167,11 +159,11 @@ class VoiceAssistantService : Service(), AudioManager.OnAudioFocusChangeListener
         when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                Log.d(TAG, "Audio focus lost — pausing voice listening")
+                Log.d(TAG, "Audio focus lost - pausing voice listening")
                 voiceEngine.stopListening()
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
-                Log.d(TAG, "Audio focus regained — resuming voice listening")
+                Log.d(TAG, "Audio focus regained - resuming voice listening")
                 requestAudioFocusAndListen()
             }
         }

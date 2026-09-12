@@ -9,9 +9,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Context extensions
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /** Attempts to start an Activity; returns false if no app can handle the Intent. */
 fun Context.safeStartActivity(intent: Intent): Boolean = try {
@@ -39,9 +39,9 @@ fun Context.showToast(message: String) {
     Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Flow extensions
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * Wraps each emission in [CypherResult.Success], catching any upstream exception
@@ -52,14 +52,14 @@ fun <T> Flow<T>.asResult(): Flow<CypherResult<T>> =
     map<T, CypherResult<T>> { CypherResult.Success(it) }
         .catch { emit(CypherResult.Error(it.message ?: "Unknown error", it)) }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // String extensions
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /** Capitalizes the first character; no-op on empty strings. */
 fun String.capitalizeFirst(): String =
     if (isEmpty()) this else this[0].uppercaseChar() + substring(1)
 
-/** Truncates to [maxLength] characters, appending "…" if truncated. */
+/** Truncates to [maxLength] characters, appending "..." if truncated. */
 fun String.truncate(maxLength: Int): String =
-    if (length <= maxLength) this else take(maxLength - 1) + "…"
+    if (length <= maxLength) this else take(maxLength - 1) + "..."

@@ -11,7 +11,7 @@ import com.cypher.assistant.data.database.typeconverters.RoomTypeConverters
  * Cypher's Room database.
  *
  * Version history:
- *  1 → Initial schema: command_history table.
+ *  1 -> Initial schema: command_history table.
  *
  * When adding new entities or changing the schema, increment [version] and add
  * an explicit Migration object in [DatabaseModule].

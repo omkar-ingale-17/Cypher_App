@@ -158,7 +158,7 @@ class AndroidTTSEngine @Inject constructor(
         val localeName = voice.locale.displayLanguage
         val shortName = voice.name.substringAfterLast("-", voice.name).take(12)
         val networkTag = if (voice.isNetworkConnectionRequired) " (Cloud)" else " (Local)"
-        return "$localeName • $genderStr $shortName$networkTag"
+        return "$localeName * $genderStr $shortName$networkTag"
     }
 
     override suspend fun speak(

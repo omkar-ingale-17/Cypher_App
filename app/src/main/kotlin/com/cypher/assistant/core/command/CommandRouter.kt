@@ -11,7 +11,7 @@ private const val TAG = "CommandRouter"
  *
  * Receives a [CommandIntent] from the NLU layer and delegates execution to the
  * appropriate [CommandHandler]. Handlers are registered via Hilt multibinding
- * (`@Binds @IntoSet`) — adding a new handler requires zero changes here.
+ * (`@Binds @IntoSet`) - adding a new handler requires zero changes here.
  *
  * The internal dispatch map is built lazily on first use, so startup cost is zero.
  *
@@ -22,7 +22,7 @@ class CommandRouter @Inject constructor(
     private val handlers: Set<@JvmSuppressWildcards CommandHandler>
 ) {
     /**
-     * Lazy map from [CommandIntentType] → [CommandHandler].
+     * Lazy map from [CommandIntentType] -> [CommandHandler].
      * Built once; duplicate registrations log a warning and keep the first binding.
      */
     private val dispatchMap: Map<CommandIntentType, CommandHandler> by lazy {
@@ -30,15 +30,15 @@ class CommandRouter @Inject constructor(
             handlers.forEach { handler ->
                 handler.supportedIntents.forEach { intentType ->
                     if (containsKey(intentType)) {
-                        Log.w(TAG, "Duplicate handler for $intentType — '${handler::class.simpleName}' ignored.")
+                        Log.w(TAG, "Duplicate handler for $intentType - '${handler::class.simpleName}' ignored.")
                     } else {
                         put(intentType, handler)
-                        Log.v(TAG, "Registered: $intentType → ${handler::class.simpleName}")
+                        Log.v(TAG, "Registered: $intentType -> ${handler::class.simpleName}")
                     }
                 }
             }
         }.also {
-            Log.i(TAG, "CommandRouter ready — ${it.size} intent(s) mapped across ${handlers.size} handler(s).")
+            Log.i(TAG, "CommandRouter ready - ${it.size} intent(s) mapped across ${handlers.size} handler(s).")
         }
     }
 
@@ -50,7 +50,7 @@ class CommandRouter @Inject constructor(
      * - If the handler throws (which it should not), catches the exception and returns a failure.
      */
     suspend fun route(intent: CommandIntent): CommandResult {
-        Log.d(TAG, "Routing → ${intent.intentType} (confidence=${intent.confidence}, src=${intent.source})")
+        Log.d(TAG, "Routing -> ${intent.intentType} (confidence=${intent.confidence}, src=${intent.source})")
 
         if (intent.intentType == CommandIntentType.UNKNOWN) {
             return CommandResult.failure(
@@ -77,10 +77,10 @@ class CommandRouter @Inject constructor(
     fun supportedIntents(): List<CommandIntentType> =
         dispatchMap.keys.sortedBy { it.name }
 
-    /** Returns the number of registered intent→handler mappings. */
+    /** Returns the number of registered intent->handler mappings. */
     fun handlerCount(): Int = dispatchMap.size
 
     // Helper used in the failure message above
     private fun String.truncate(max: Int) =
-        if (length <= max) this else take(max - 1) + "…"
+        if (length <= max) this else take(max - 1) + "..."
 }

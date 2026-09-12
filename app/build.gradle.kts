@@ -54,7 +54,7 @@ android {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     }
 
-    // Room schema export directory — useful for migration testing
+    // Room schema export directory - useful for migration testing
     ksp {
         arg("room.schemaLocation", "$projectDir/schemas")
         arg("room.incremental",    "true")
@@ -109,4 +109,4 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test)
     debugImplementation(libs.androidx.compose.ui.tooling)
-}
+}

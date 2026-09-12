@@ -32,7 +32,7 @@ interface CommandHistoryDao {
     @Query("DELETE FROM command_history")
     suspend fun clearAll()
 
-    /** Enforces max-history cap — deletes oldest entries beyond [keepCount]. */
+    /** Enforces max-history cap - deletes oldest entries beyond [keepCount]. */
     @Query("""
         DELETE FROM command_history 
         WHERE id NOT IN (

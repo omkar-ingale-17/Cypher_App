@@ -7,7 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.Multibinds
 
 /**
- * Core DI module — provides the empty base Set<CommandHandler> for Hilt multibinding.
+ * Core DI module - provides the empty base Set<CommandHandler> for Hilt multibinding.
  *
  * Individual feature modules add their handlers via `@Binds @IntoSet` in their
  * own Hilt modules. This ensures the router always has a valid (possibly empty)

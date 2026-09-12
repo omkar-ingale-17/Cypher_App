@@ -5,7 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Cypher is dark-only — a light theme is intentionally not provided in Stage 1.
+// Cypher is dark-only - a light theme is intentionally not provided in Stage 1.
 // If light mode support is needed later, a lightColorScheme() block can be added.
 private val CypherDarkColorScheme = darkColorScheme(
     primary            = CypherCyan,
