@@ -17,10 +17,12 @@ enum class CommandIntentType {
     THANK_YOU,
     GOODBYE,
 
-    // -- App Control -------------------------------------------------------
+    // -- App & System Navigation (Module 2) --------------------------------
     OPEN_APP,
     CLOSE_APP,
     LIST_APPS,
+    MINIMIZE_APP,
+    GO_HOME,
 
     // -- Telephony ---------------------------------------------------------
     CALL_CONTACT,
@@ -67,7 +69,7 @@ enum class CommandIntentType {
     DISMISS_NOTIFICATION,
     REPLY_NOTIFICATION,
 
-    // -- Security ----------------------------------------------------------
+    // -- Security & Device Control -----------------------------------------
     LOCK_SCREEN,
     BIOMETRIC_AUTH,
 

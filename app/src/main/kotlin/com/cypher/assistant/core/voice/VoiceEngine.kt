@@ -1,6 +1,7 @@
 package com.cypher.assistant.core.voice
 
 import android.util.Log
+import com.cypher.assistant.core.command.CommandIntentType
 import com.cypher.assistant.core.command.CommandRouter
 import com.cypher.assistant.core.command.CommandSource
 import com.cypher.assistant.core.intent.CommandIntentEngine
@@ -28,18 +29,10 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
+private const val TAG = "CYPHER_VOICE"
+
 /**
- * Orchestrator for the voice assistant lifecycle.
- *
- * Enforces the required state machine:
- *  LISTENING (Mic ON)
- *  → WAKE_WORD_DETECTED
- *  → PROCESSING (Mic OFF)
- *  → TTS SPEAKING (Mic OFF)
- *  → TTS DONE
- *  → MIC ON
- *  → LISTENING (Continuous wake-word listening)
- *  → Repeat forever.
+ * Core Voice Assistant Orchestrator for Cypher AI.
  */
 @Singleton
 class VoiceEngine @Inject constructor(
@@ -50,11 +43,6 @@ class VoiceEngine @Inject constructor(
     private val commandRouter: CommandRouter,
     private val historyRepository: CommandHistoryRepository
 ) {
-
-    companion object {
-        private const val TAG = "CYPHER_VOICE"
-    }
-
     private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val _voiceState = MutableStateFlow(VoiceState.IDLE)
@@ -94,7 +82,7 @@ class VoiceEngine @Inject constructor(
         watchdogJob?.cancel()
         watchdogJob = engineScope.launch {
             while (isActive) {
-                delay(20_000L) // check every 20s
+                delay(20_000L)
                 if (isShutdown) break
 
                 val state = _voiceState.value
@@ -102,7 +90,6 @@ class VoiceEngine @Inject constructor(
                         state == VoiceState.LISTENING_FOR_COMMAND
                 val silentDuration = System.currentTimeMillis() - lastSttActivityTime
 
-                // If silent for > 35s while supposed to be listening and not speaking -> force re-arm
                 if (isListeningState && silentDuration > 35_000L && state != VoiceState.SPEAKING && state != VoiceState.PROCESSING) {
                     Log.w(TAG, "CYPHER_VOICE: Watchdog detected silent stall (${silentDuration / 1000}s) -> re-arming recognizer")
                     lastSttActivityTime = System.currentTimeMillis()
@@ -118,7 +105,6 @@ class VoiceEngine @Inject constructor(
                 lastSttActivityTime = System.currentTimeMillis()
                 if (isShutdown) return@collect
 
-                // Drop STT events during speaking/processing to prevent feedback loops
                 val currentState = _voiceState.value
                 if (currentState == VoiceState.SPEAKING || currentState == VoiceState.PROCESSING) {
                     Log.d(TAG, "CYPHER_VOICE: Dropping STT result during $currentState: \"$text\"")
@@ -182,7 +168,6 @@ class VoiceEngine @Inject constructor(
 
     /**
      * Ensures listening is active if Cypher is in a listening state.
-     * Called on screen unlock / screen on / audio focus regained.
      */
     fun ensureListeningActive() {
         if (isShutdown) return
@@ -254,7 +239,6 @@ class VoiceEngine @Inject constructor(
                     is WakePhraseResult.DirectCommand,
                     is WakePhraseResult.None -> {
                         Log.d(TAG, "CYPHER_VOICE: Non-wake speech in standby: \"$rawSpeech\" -> continuing wake-word listening")
-                        // IMPORTANT: Must restart/re-arm listening so mic stays ON!
                         startListening(requireWakePhrase = true)
                     }
                 }
@@ -272,7 +256,6 @@ class VoiceEngine @Inject constructor(
                     Log.i(TAG, "CYPHER_VOICE: Command detected = \"$command\"")
                     executeCommandPipeline(command, CommandSource.VOICE)
                 } else {
-                    // Empty speech -> return immediately to continuous wake-word listening
                     startListening(requireWakePhrase = true)
                 }
             }
@@ -290,18 +273,25 @@ class VoiceEngine @Inject constructor(
         processingJob = engineScope.launch {
             try {
                 _voiceState.value = VoiceState.PROCESSING
-                Log.i(TAG, "CYPHER_VOICE: Processing command = \"$commandText\" from $source")
 
-                // 1. Intent Parsing
+                // 1. Pre-process & Parse Intent
+                val normalized = intentEngine.preProcessText(commandText)
                 val intent = intentEngine.parse(commandText, source)
-                Log.d(TAG, "CYPHER_VOICE: Intent = ${intent.intentType}")
 
-                // 2. Route & Execute
+                Log.i("CYPHER_COMMAND", """
+                    [CYPHER_COMMAND]
+                    Recognized: "$commandText"
+                    Normalized: "$normalized"
+                    Intent: ${intent.intentType}
+                    Parameters: ${intent.parameters}
+                """.trimIndent())
+
+                // 2. Route & Execute Action
                 val result = commandRouter.route(intent)
                 _lastResponse.value = result.message
-                Log.i(TAG, "CYPHER_VOICE: Response generated = \"${result.message}\"")
+                Log.i("CYPHER_COMMAND", "[CYPHER_COMMAND] Action: ${intent.intentType} completed -> \"${result.message}\"")
 
-                // 3. Persist
+                // 3. Persist in database
                 historyRepository.record(intent, result)
 
                 // 4. TTS -> speaks response while microphone is paused (MIC OFF -> TTS -> MIC ON)
@@ -310,7 +300,7 @@ class VoiceEngine @Inject constructor(
                 // 5. Return to continuous wake-word listening
                 if (isShutdown) return@launch
                 Log.i(TAG, "CYPHER_VOICE: TTS completed -> returning to continuous wake-word listening")
-                delay(200L) // brief settling delay before mic restarts
+                delay(200L)
                 if (!isShutdown) {
                     startListening(requireWakePhrase = true)
                 }
@@ -336,8 +326,8 @@ class VoiceEngine @Inject constructor(
         if (text.isBlank() || isShutdown) return
 
         _voiceState.value = VoiceState.SPEAKING
-        sttEngine.cancel() // pauses recognizer & logs MIC_OFF
-        delay(200L) // allow cancel to settle and mic audio buffer to clear
+        sttEngine.cancel()
+        delay(200L)
 
         Log.d(TAG, "CYPHER_TTS: Speaking = \"${text.take(80)}\"")
         try {

@@ -8,39 +8,38 @@ import javax.inject.Singleton
 import kotlin.math.max
 
 /**
- * High-accuracy application matching and resolution engine.
+ * Natural language resolver that matches raw spoken text to installed applications.
  *
- * Capabilities:
- *  1. Exact match (case & whitespace normalized)
- *  2. Alias dictionary lookup (e.g. "what's app" -> WhatsApp, "insta" -> Instagram)
- *  3. Word-boundary token matching
- *  4. Safe Levenshtein similarity with strict confidence threshold
- *  5. Ambiguity detection for duplicate/similar application names
+ * Employs a multi-tier matching strategy:
+ * 1. Exact Name Matching (case-insensitive)
+ * 2. Exact Package Name Matching
+ * 3. Canonical Alias / Synonym Lookup (e.g., "insta" -> "Instagram", "you tube" -> "YouTube")
+ * 4. Word-Boundary / Prefix / Substring Matching
+ * 5. Safe Fuzzy Levenshtein Matching (confidence threshold >= 0.75)
  */
 @Singleton
 class ApplicationMatcher @Inject constructor() {
 
-    /**
-     * Pre-defined alias mappings for popular applications and speech recognition variations.
-     * Maps normalized alias tokens -> list of canonical application name tokens.
-     */
     private val aliasMap: Map<String, List<String>> = mapOf(
-        "whatsapp" to listOf("whatsapp", "whats app"),
-        "what's app" to listOf("whatsapp"),
-        "whats app" to listOf("whatsapp"),
-        "what app" to listOf("whatsapp"),
-        "instagram" to listOf("instagram", "insta"),
-        "insta" to listOf("instagram"),
-        "youtube" to listOf("youtube", "you tube"),
-        "you tube" to listOf("youtube"),
+        "youtube" to listOf("youtube", "yt", "you tube"),
         "yt" to listOf("youtube"),
-        "chrome" to listOf("chrome", "google chrome", "chrome browser"),
-        "google chrome" to listOf("chrome", "google chrome"),
+        "you tube" to listOf("youtube"),
+        "whatsapp" to listOf("whatsapp", "whats app", "what s app", "wa"),
+        "wa" to listOf("whatsapp"),
+        "whats app" to listOf("whatsapp"),
+        "what s app" to listOf("whatsapp"),
+        "instagram" to listOf("instagram", "insta", "ig", "insta gram"),
+        "insta" to listOf("instagram"),
+        "ig" to listOf("instagram"),
+        "insta gram" to listOf("instagram"),
+        "chrome" to listOf("chrome", "google chrome", "browser"),
+        "google chrome" to listOf("chrome"),
         "chrome browser" to listOf("chrome"),
         "spotify" to listOf("spotify", "spotify music"),
         "maps" to listOf("maps", "google maps"),
         "google maps" to listOf("maps", "google maps"),
-        "gmail" to listOf("gmail", "google mail", "email"),
+        "gmail" to listOf("gmail", "google mail", "email", "g mail"),
+        "g mail" to listOf("gmail"),
         "google mail" to listOf("gmail"),
         "email" to listOf("gmail", "email", "mail"),
         "telegram" to listOf("telegram"),
@@ -49,8 +48,9 @@ class ApplicationMatcher @Inject constructor() {
         "snap" to listOf("snapchat"),
         "twitter" to listOf("x", "twitter"),
         "x" to listOf("x", "twitter"),
-        "facebook" to listOf("facebook", "fb"),
+        "facebook" to listOf("facebook", "fb", "face book"),
         "fb" to listOf("facebook"),
+        "face book" to listOf("facebook"),
         "settings" to listOf("settings", "system settings"),
         "system settings" to listOf("settings"),
         "camera" to listOf("camera"),
@@ -61,7 +61,8 @@ class ApplicationMatcher @Inject constructor() {
         "sms" to listOf("messages", "sms"),
         "phone" to listOf("phone", "dialer", "call"),
         "dialer" to listOf("phone", "dialer"),
-        "play store" to listOf("google play store", "play store", "google play"),
+        "play store" to listOf("google play store", "play store", "google play", "playstore"),
+        "playstore" to listOf("google play store", "play store"),
         "google play" to listOf("google play store", "play store"),
         "files" to listOf("files", "file manager", "my files"),
         "file manager" to listOf("files", "file manager"),
@@ -114,7 +115,6 @@ class ApplicationMatcher @Inject constructor() {
             if (aliasMatches.size == 1) {
                 return AppMatchResult.Match(aliasMatches.first(), confidence = 0.98f, matchedAlias = normalizedQuery)
             } else if (aliasMatches.size > 1) {
-                // If one of them is an exact alias match, favor it
                 val primary = aliasMatches.firstOrNull { normalize(it.appName) in targetAliases }
                 if (primary != null) {
                     return AppMatchResult.Match(primary, confidence = 0.95f, matchedAlias = normalizedQuery)
@@ -134,7 +134,6 @@ class ApplicationMatcher @Inject constructor() {
         if (wordMatches.size == 1) {
             return AppMatchResult.Match(wordMatches.first(), confidence = 0.90f)
         } else if (wordMatches.size > 1) {
-            // Check if one candidate's name equals the query exactly
             val singleExact = wordMatches.firstOrNull { normalize(it.appName) == normalizedQuery }
             if (singleExact != null) {
                 return AppMatchResult.Match(singleExact, confidence = 0.95f)
@@ -171,17 +170,28 @@ class ApplicationMatcher @Inject constructor() {
     fun normalize(text: String): String {
         var clean = text.trim().lowercase(Locale.ROOT)
 
+        // Pre-normalize common compound app names
+        clean = clean.replace("what's app", "whatsapp")
+            .replace("whats app", "whatsapp")
+            .replace("what s app", "whatsapp")
+            .replace("you tube", "youtube")
+            .replace("face book", "facebook")
+            .replace("insta gram", "instagram")
+            .replace("g mail", "gmail")
+            .replace("play store", "play store")
+            .replace("playstore", "play store")
+
         // Remove filler prefixes
         val prefixes = listOf("my", "the", "app", "application", "please", "can you", "could you", "open", "launch", "start", "run", "go to", "find", "search for")
         for (prefix in prefixes) {
-            val regex = Regex("""^(?:$prefix)\s*""", RegexOption.IGNORE_CASE)
+            val regex = Regex("""^(?:$prefix)\b\s*""", RegexOption.IGNORE_CASE)
             clean = regex.replace(clean, "")
         }
 
         // Remove trailing fillers
         val suffixes = listOf("app", "application", "for me", "please")
         for (suffix in suffixes) {
-            val regex = Regex("""\s*(?:$suffix)$""", RegexOption.IGNORE_CASE)
+            val regex = Regex("""\s*\b(?:$suffix)$""", RegexOption.IGNORE_CASE)
             clean = regex.replace(clean, "")
         }
 

@@ -10,16 +10,37 @@ import androidx.compose.ui.Modifier
 import com.cypher.assistant.features.voice.VoiceScreen
 import com.cypher.assistant.ui.theme.CypherTheme
 import dagger.hilt.android.AndroidEntryPoint
+import java.lang.ref.WeakReference
 
 /**
  * Single-activity host for all Compose navigation.
- * Future screens are added as Composable destinations - no new Activities needed.
+ * Keeps a weak reference to allow graceful background minimization (moveTaskToBack)
+ * without stopping the foreground VoiceAssistantService.
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        private var activeActivity: WeakReference<MainActivity>? = null
+
+        /**
+         * Minimizes the Cypher activity safely by sending its task to the background.
+         * The VoiceAssistantService continues listening uninterrupted.
+         */
+        fun minimizeActivity(): Boolean {
+            return activeActivity?.get()?.let { activity ->
+                if (!activity.isFinishing && !activity.isDestroyed) {
+                    activity.moveTaskToBack(true)
+                } else {
+                    false
+                }
+            } ?: false
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        activeActivity = WeakReference(this)
         enableEdgeToEdge()
         setContent {
             CypherTheme {
@@ -27,6 +48,18 @@ class MainActivity : ComponentActivity() {
                     VoiceScreen()
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        activeActivity = WeakReference(this)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (activeActivity?.get() == this) {
+            activeActivity = null
         }
     }
 }

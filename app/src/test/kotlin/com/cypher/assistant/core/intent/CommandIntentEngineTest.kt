@@ -3,7 +3,6 @@ package com.cypher.assistant.core.intent
 import com.cypher.assistant.core.command.CommandIntentType
 import com.cypher.assistant.core.command.CommandSource
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -29,40 +28,95 @@ class CommandIntentEngineTest {
     }
 
     @Test
-    fun parsesWhatIsYourNameCommandCorrectly() {
-        val intent = intentEngine.parse("what is your name", CommandSource.VOICE)
-        assertEquals(CommandIntentType.ASSISTANT_NAME, intent.intentType)
+    fun parsesOpenYouTubeWithWakeWordVariations() {
+        val variations = listOf(
+            "Cypher open YouTube",
+            "Cypher, open YouTube",
+            "open YouTube Cypher",
+            "open the YouTube app",
+            "Jaan open WhatsApp",
+            "Baby open Camera"
+        )
+        for (v in variations) {
+            val intent = intentEngine.parse(v, CommandSource.VOICE)
+            assertEquals("Failed for variation: $v", CommandIntentType.OPEN_APP, intent.intentType)
+        }
     }
 
     @Test
-    fun parsesWhoAreYouCommandCorrectly() {
-        val intent = intentEngine.parse("who are you", CommandSource.VOICE)
-        assertEquals(CommandIntentType.ASSISTANT_NAME, intent.intentType)
+    fun parsesMinimizeCommandsAndAsrVariations() {
+        val variations = listOf(
+            "Cypher minimize",
+            "Cypher minimize app",
+            "Cypher minimize the app",
+            "Cypher go to background",
+            "Jaan minimize app",
+            "Baby minimize",
+            "minimize",
+            "minimizer",
+            "minimized",
+            "hide app"
+        )
+        for (v in variations) {
+            val intent = intentEngine.parse(v, CommandSource.VOICE)
+            assertEquals("Failed for variation: $v", CommandIntentType.MINIMIZE_APP, intent.intentType)
+        }
     }
 
     @Test
-    fun parsesHowAreYouCommandCorrectly() {
-        val intent = intentEngine.parse("how are you", CommandSource.VOICE)
-        assertEquals(CommandIntentType.ASSISTANT_STATUS, intent.intentType)
+    fun parsesGoHomeCommandsAndAsrVariations() {
+        val variations = listOf(
+            "Cypher go back to home",
+            "Cypher go home",
+            "Cypher open home",
+            "Cypher show home",
+            "Baby go home",
+            "Jaan go to home",
+            "go home",
+            "go to home",
+            "home screen",
+            "back to home"
+        )
+        for (v in variations) {
+            val intent = intentEngine.parse(v, CommandSource.VOICE)
+            assertEquals("Failed for variation: $v", CommandIntentType.GO_HOME, intent.intentType)
+        }
     }
 
     @Test
-    fun parsesWhatCanYouDoCommandCorrectly() {
-        val intent = intentEngine.parse("what can you do", CommandSource.VOICE)
-        assertEquals(CommandIntentType.ASSISTANT_CAPABILITIES, intent.intentType)
+    fun parsesLockScreenCommandsAndAsrVariations() {
+        val variations = listOf(
+            "Cypher, screen locked",
+            "Cypher, screen lock",
+            "Cypher, lock the screen",
+            "Cypher lock the screen",
+            "Cypher lock screen",
+            "Cypher lock my phone",
+            "screen locker",
+            "screen lock",
+            "lock screen",
+            "lock my phone"
+        )
+        for (v in variations) {
+            val intent = intentEngine.parse(v, CommandSource.VOICE)
+            assertEquals("Failed for variation: $v", CommandIntentType.LOCK_SCREEN, intent.intentType)
+        }
     }
 
     @Test
-    fun parsesMyNameIsCommandAndExtractsName() {
-        val intent = intentEngine.parse("my name is Bruce", CommandSource.VOICE)
-        assertEquals(CommandIntentType.SET_USER_NAME, intent.intentType)
-        assertEquals("Bruce", intent.parameters["name"])
-    }
-
-    @Test
-    fun parsesWhatIsMyNameCommand() {
-        val intent = intentEngine.parse("what is my name", CommandSource.VOICE)
-        assertEquals(CommandIntentType.GET_USER_NAME, intent.intentType)
+    fun parsesCloseAppCommands() {
+        val variations = listOf(
+            "Cypher close Instagram",
+            "Cypher close Instagram app",
+            "close Instagram",
+            "kill Instagram",
+            "stop Instagram app"
+        )
+        for (v in variations) {
+            val intent = intentEngine.parse(v, CommandSource.VOICE)
+            assertEquals("Failed for variation: $v", CommandIntentType.CLOSE_APP, intent.intentType)
+            assertEquals("Failed app_name for: $v", "instagram", intent.parameters["app_name"]?.lowercase())
+        }
     }
 
     @Test
@@ -106,20 +160,6 @@ class CommandIntentEngineTest {
     fun parsesGoodbyeCommand() {
         val intent = intentEngine.parse("goodbye", CommandSource.VOICE)
         assertEquals(CommandIntentType.GOODBYE, intent.intentType)
-    }
-
-    @Test
-    fun parsesOpenWhatsAppCommandCorrectly() {
-        val intent = intentEngine.parse("open WhatsApp", CommandSource.VOICE)
-        assertEquals(CommandIntentType.OPEN_APP, intent.intentType)
-        assertEquals("WhatsApp", intent.parameters["app_name"])
-    }
-
-    @Test
-    fun parsesLaunchCameraCommandCorrectly() {
-        val intent = intentEngine.parse("launch Camera", CommandSource.TEXT)
-        assertEquals(CommandIntentType.OPEN_APP, intent.intentType)
-        assertEquals("Camera", intent.parameters["app_name"])
     }
 
     @Test

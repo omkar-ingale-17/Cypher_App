@@ -8,13 +8,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Deterministic regular expression and keyword-based NLU Engine.
+ * Deterministic regular expression and keyword-based NLU Engine with robust ASR normalization.
  *
- * Pattern priority is critical:
- * 1. Conversational greetings and persona intents (exact and leading matches)
- * 2. Time and Date queries
- * 3. Specific verbs (call, dial, text, open, youtube, etc.)
- * 4. General fallbacks (web search, unknown)
+ * Pattern priority:
+ * 1. Conversational greetings and persona intents
+ * 2. Time, Date, and status queries
+ * 3. System Navigation: MINIMIZE_APP, GO_HOME, LOCK_SCREEN
+ * 4. App Control: OPEN_APP, CLOSE_APP, LIST_APPS, OPEN_SETTINGS
+ * 5. Specific device verbs (call, dial, sms, youtube, media, volume)
+ * 6. General fallbacks (web search, unknown)
  */
 @Singleton
 class CommandIntentEngine @Inject constructor() {
@@ -36,7 +38,7 @@ class CommandIntentEngine @Inject constructor() {
         IntentMatcher(
             type = CommandIntentType.ASSISTANT_STATUS,
             patterns = listOf(
-                Regex("""^(?:how\s+are\s+you|how\s+are\s+you\s+doing|how'?s\s+it\s+going|how\s+do\s+you\s+do|are\s+you\s+okay|how\s+is\s+everything)$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:how\s+are\s+you|how\s+are\s+you\s+doing|how'?s\s+it\s+going|how\s+is\s+it\s+going|how\s+do\s+you\s+do|are\s+you\s+okay|how\s+is\s+everything)$""", RegexOption.IGNORE_CASE)
             )
         ),
         IntentMatcher(
@@ -58,6 +60,7 @@ class CommandIntentEngine @Inject constructor() {
                 Regex("""^(?:what\s+is\s+my\s+name|what'?s\s+my\s+name|who\s+am\s+i|do\s+you\s+know\s+my\s+name)$""", RegexOption.IGNORE_CASE)
             )
         ),
+
         // -- Time & Date ------------------------------------------------------
         IntentMatcher(
             type = CommandIntentType.GET_TIME,
@@ -84,6 +87,28 @@ class CommandIntentEngine @Inject constructor() {
             )
         ),
 
+        // -- System Navigation & Device Control --------------------------------
+        IntentMatcher(
+            type = CommandIntentType.MINIMIZE_APP,
+            patterns = listOf(
+                Regex("""^(?:minimize|minimise)(?:\s+(?:the\s+)?(?:app|screen|cypher))?$""", RegexOption.IGNORE_CASE),
+                Regex("""^(?:go\s+to\s+background|send\s+to\s+background|background\s+app)$""", RegexOption.IGNORE_CASE),
+                Regex("""^(?:hide|hide\s+(?:the\s+)?app|hide\s+cypher)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.GO_HOME,
+            patterns = listOf(
+                Regex("""^(?:go\s+(?:back\s+)?(?:to\s+)?home(?:\s+screen)?|open\s+home(?:\s+screen)?|show\s+home(?:\s+screen)?|home\s+screen|back\s+to\s+home|go\s+home|home)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.LOCK_SCREEN,
+            patterns = listOf(
+                Regex("""^(?:lock(?:\s+the)?\s+screen|screen\s+lock(?:ed|er)?|lock\s+(?:the\s+|my\s+)?phone|lock\s+(?:the\s+|my\s+)?device|turn\s+off\s+screen|lock)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+
         // -- System Settings & Navigation -------------------------------------
         IntentMatcher(
             type = CommandIntentType.OPEN_SETTINGS,
@@ -94,7 +119,7 @@ class CommandIntentEngine @Inject constructor() {
             paramExtractor = { mapOf("setting_type" to "settings") }
         ),
 
-        // -- Apps Control (Module 2) ------------------------------------------
+        // -- Apps Control -----------------------------------------------------
         IntentMatcher(
             type = CommandIntentType.LIST_APPS,
             patterns = listOf(
@@ -104,24 +129,24 @@ class CommandIntentEngine @Inject constructor() {
         IntentMatcher(
             type = CommandIntentType.OPEN_APP,
             patterns = listOf(
-                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:open|launch|start|run|go\s+to)\s+(?:the\s+|my\s+)?(.+?)(?:\s+for\s+me|\s+app)?$""", RegexOption.IGNORE_CASE),
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:open|launch|start|run|go\s+to)\s+(?:the\s+|my\s+)?(.+?)(?:\s+(?:app|for\s+me|please|cypher|cipher|jaan|jan|baby))?$""", RegexOption.IGNORE_CASE),
                 Regex("""^(?:search\s+my\s+apps\s+for|search\s+apps\s+for|find\s+app|find)\s+(.+)$""", RegexOption.IGNORE_CASE)
             ),
             paramExtractor = { match ->
                 val rawName = match.groupValues[1].trim()
-                // Clean any trailing conversational tags
-                val cleanName = rawName.replace(Regex("""\s+(?:app|for\s+me|please)$""", RegexOption.IGNORE_CASE), "").trim()
+                val cleanName = rawName.replace(Regex("""\s+(?:app|for\s+me|please|cypher|cipher|jaan|jan|baby)$""", RegexOption.IGNORE_CASE), "").trim()
                 mapOf("app_name" to cleanName)
             }
         ),
         IntentMatcher(
             type = CommandIntentType.CLOSE_APP,
             patterns = listOf(
-                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:close|kill|stop|force\s+stop)\s+(?:the\s+|my\s+)?(.+?)(?:\s+for\s+me|\s+app)?$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:close|kill|stop|force\s+stop)\s+(?:the\s+|my\s+)?(.+?)(?:\s+(?:app|for\s+me|please|cypher|cipher|jaan|jan|baby))?$""", RegexOption.IGNORE_CASE),
+                Regex("""^close\s+(?:the\s+)?app$""", RegexOption.IGNORE_CASE)
             ),
             paramExtractor = { match ->
-                val rawName = match.groupValues[1].trim()
-                val cleanName = rawName.replace(Regex("""\s+(?:app|for\s+me|please)$""", RegexOption.IGNORE_CASE), "").trim()
+                val rawName = if (match.groupValues.size > 1) match.groupValues[1].trim() else ""
+                val cleanName = rawName.replace(Regex("""\s+(?:app|for\s+me|please|cypher|cipher|jaan|jan|baby)$""", RegexOption.IGNORE_CASE), "").trim()
                 mapOf("app_name" to cleanName)
             }
         ),
@@ -275,6 +300,81 @@ class CommandIntentEngine @Inject constructor() {
     )
 
     /**
+     * Pre-processes raw natural speech text into normalized form:
+     * - Expands contractions ("what's" -> "what is")
+     * - Strips punctuation and excessive whitespace
+     * - Strips leading and trailing wake words and conversational filler words
+     * - Normalizes common ASR phonetic variations
+     */
+    fun preProcessText(rawText: String): String {
+        var text = rawText.trim().lowercase(Locale.ROOT)
+        if (text.isBlank()) return ""
+
+        // 1. Expand standard conversational contractions with word boundary
+        text = text.replace(Regex("""\bwhat's\b""", RegexOption.IGNORE_CASE), "what is")
+            .replace(Regex("""\bwhats\b""", RegexOption.IGNORE_CASE), "what is")
+            .replace(Regex("""\bwho's\b""", RegexOption.IGNORE_CASE), "who is")
+            .replace(Regex("""\bhow's\b""", RegexOption.IGNORE_CASE), "how is")
+            .replace(Regex("""\btoday's\b""", RegexOption.IGNORE_CASE), "today")
+
+        // 2. Remove punctuation marks
+        text = text.replace(Regex("""[,.?!:;\\-_"']+"""), " ")
+        text = text.replace(Regex("""\s+"""), " ").trim()
+
+        // 3. Strip leading / trailing wake words and prefixes
+        val prefixes = listOf("hey", "ok", "okay", "hello", "hi", "yo", "dear")
+        val wakeWords = listOf("cypher", "cipher", "jaan", "jann", "jan", "baby")
+
+        var changed = true
+        while (changed) {
+            changed = false
+            for (w in wakeWords) {
+                for (p in prefixes) {
+                    val pat = Regex("""^$p\s+$w\s+""", RegexOption.IGNORE_CASE)
+                    if (pat.containsMatchIn(text)) {
+                        text = pat.replace(text, "").trim()
+                        changed = true
+                    }
+                }
+                val leadPat = Regex("""^$w\s+""", RegexOption.IGNORE_CASE)
+                if (leadPat.containsMatchIn(text)) {
+                    text = leadPat.replace(text, "").trim()
+                    changed = true
+                }
+                val trailPat = Regex("""\s+$w$""", RegexOption.IGNORE_CASE)
+                if (trailPat.containsMatchIn(text)) {
+                    text = trailPat.replace(text, "").trim()
+                    changed = true
+                }
+            }
+        }
+
+        // 4. Common ASR phonetic replacements
+        val replacements = listOf(
+            Regex("""\bminimizer\b""", RegexOption.IGNORE_CASE) to "minimize",
+            Regex("""\bminimiser\b""", RegexOption.IGNORE_CASE) to "minimize",
+            Regex("""\bminimized\b""", RegexOption.IGNORE_CASE) to "minimize",
+            Regex("""\bminimised\b""", RegexOption.IGNORE_CASE) to "minimize",
+            Regex("""\bscreen locked\b""", RegexOption.IGNORE_CASE) to "lock screen",
+            Regex("""\bscreen locker\b""", RegexOption.IGNORE_CASE) to "lock screen",
+            Regex("""\bscreen lock\b""", RegexOption.IGNORE_CASE) to "lock screen",
+            Regex("""\byou tube\b""", RegexOption.IGNORE_CASE) to "youtube",
+            Regex("""\bwhat\s+s\s+app\b""", RegexOption.IGNORE_CASE) to "whatsapp",
+            Regex("""\bwhats\s+app\b""", RegexOption.IGNORE_CASE) to "whatsapp",
+            Regex("""\bface\s+book\b""", RegexOption.IGNORE_CASE) to "facebook",
+            Regex("""\binsta\s+gram\b""", RegexOption.IGNORE_CASE) to "instagram",
+            Regex("""\bg\s+mail\b""", RegexOption.IGNORE_CASE) to "gmail",
+            Regex("""\bplay\s+store\b""", RegexOption.IGNORE_CASE) to "play store",
+            Regex("""\bplaystore\b""", RegexOption.IGNORE_CASE) to "play store"
+        )
+        for ((pattern, repl) in replacements) {
+            text = pattern.replace(text, repl)
+        }
+
+        return text.replace(Regex("""\s+"""), " ").trim()
+    }
+
+    /**
      * Parse raw natural text into a structured [CommandIntent].
      */
     fun parse(rawText: String, source: CommandSource = CommandSource.VOICE): CommandIntent {
@@ -283,11 +383,37 @@ class CommandIntentEngine @Inject constructor() {
             return CommandIntent.unknown("", source)
         }
 
+        val normalized = preProcessText(trimmed)
+        if (normalized.isBlank()) {
+            return CommandIntent.unknown(trimmed, source)
+        }
+
         for (matcher in intentMatchers) {
             for (pattern in matcher.patterns) {
-                val match = pattern.find(trimmed)
-                if (match != null) {
-                    val params = matcher.paramExtractor(match)
+                val normMatch = pattern.find(normalized)
+                if (normMatch != null) {
+                    val trimmedMatch = pattern.find(trimmed)
+                    val chosenMatch = if (trimmedMatch != null &&
+                        !trimmedMatch.groupValues.any { it.contains("cypher", ignoreCase = true) || it.contains("baby", ignoreCase = true) || it.contains("jaan", ignoreCase = true) }
+                    ) {
+                        trimmedMatch
+                    } else {
+                        normMatch
+                    }
+                    val params = matcher.paramExtractor(chosenMatch)
+                    return CommandIntent(
+                        intentType = matcher.type,
+                        parameters = params,
+                        rawText = trimmed,
+                        confidence = 0.95f,
+                        requiresConfirmation = matcher.requiresConfirmation,
+                        source = source
+                    )
+                }
+
+                val directMatch = pattern.find(trimmed)
+                if (directMatch != null) {
+                    val params = matcher.paramExtractor(directMatch)
                     return CommandIntent(
                         intentType = matcher.type,
                         parameters = params,
