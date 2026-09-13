@@ -1,5 +1,7 @@
 package com.cypher.assistant.features.voice
 
+import com.cypher.assistant.features.applications.presentation.ApplicationScreen
+
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -47,6 +49,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -184,6 +187,7 @@ fun VoiceScreen(
                     voiceState = uiState.voiceState,
                     wakeWordEnabled = uiState.userPreferences.wakeWordEnabled,
                     onUserClick = { showNameEditDialog = true },
+                    onAppsClick = { viewModel.openApplicationsSheet() },
                     onSettingsClick = { viewModel.openSettingsSheet() }
                 )
 
@@ -270,6 +274,18 @@ fun VoiceScreen(
                 )
             }
 
+            // Application Control Dialog
+            if (uiState.isApplicationsSheetOpen) {
+                androidx.compose.ui.window.Dialog(
+                    onDismissRequest = { viewModel.closeApplicationsSheet() },
+                    properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+                ) {
+                    ApplicationScreen(
+                        onDismiss = { viewModel.closeApplicationsSheet() }
+                    )
+                }
+            }
+
             // Voice Settings Bottom Sheet
             if (uiState.isSettingsSheetOpen) {
                 VoiceSettingsBottomSheet(
@@ -299,6 +315,7 @@ private fun CypherTopBar(
     voiceState: VoiceState,
     wakeWordEnabled: Boolean,
     onUserClick: () -> Unit,
+    onAppsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -396,6 +413,22 @@ private fun CypherTopBar(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+
+            IconButton(
+                onClick = onAppsClick,
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(CypherCardBg)
+                    .border(1.dp, CypherCardBorder, CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Apps,
+                    contentDescription = "Applications",
+                    tint = CypherCyan,
+                    modifier = Modifier.size(18.dp)
+                )
             }
 
             IconButton(

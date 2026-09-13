@@ -30,13 +30,13 @@ class CommandIntentEngine @Inject constructor() {
         IntentMatcher(
             type = CommandIntentType.ASSISTANT_NAME,
             patterns = listOf(
-                Regex("""^(?:what\s+is\s+your\s+name|what\'?s\s+your\s+name|who\s+are\s+you|tell\s+me\s+your\s+name)$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:what\s+is\s+your\s+name|what'?s\s+your\s+name|who\s+are\s+you|tell\s+me\s+your\s+name)$""", RegexOption.IGNORE_CASE)
             )
         ),
         IntentMatcher(
             type = CommandIntentType.ASSISTANT_STATUS,
             patterns = listOf(
-                Regex("""^(?:how\s+are\s+you|how\s+are\s+you\s+doing|how\'?s\s+it\s+going|how\s+do\s+you\s+do|are\s+you\s+okay|how\s+is\s+everything)$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:how\s+are\s+you|how\s+are\s+you\s+doing|how'?s\s+it\s+going|how\s+do\s+you\s+do|are\s+you\s+okay|how\s+is\s+everything)$""", RegexOption.IGNORE_CASE)
             )
         ),
         IntentMatcher(
@@ -55,14 +55,14 @@ class CommandIntentEngine @Inject constructor() {
         IntentMatcher(
             type = CommandIntentType.GET_USER_NAME,
             patterns = listOf(
-                Regex("""^(?:what\s+is\s+my\s+name|what\'?s\s+my\s+name|who\s+am\s+i|do\s+you\s+know\s+my\s+name)$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:what\s+is\s+my\s+name|what'?s\s+my\s+name|who\s+am\s+i|do\s+you\s+know\s+my\s+name)$""", RegexOption.IGNORE_CASE)
             )
         ),
         // -- Time & Date ------------------------------------------------------
         IntentMatcher(
             type = CommandIntentType.GET_TIME,
             patterns = listOf(
-                Regex("""^(?:what\s+is\s+the\s+time|what\s+time\s+is\s+it|what\'?s\s+the\s+time|tell\s+me\s+the\s+time|current\s+time|time\s+please|can\s+you\s+tell\s+me\s+the\s+time|the\s+time|time)$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:what\s+is\s+the\s+time|what\s+time\s+is\s+it|what'?s\s+the\s+time|tell\s+me\s+the\s+time|current\s+time|time\s+please|can\s+you\s+tell\s+me\s+the\s+time|the\s+time|time)$""", RegexOption.IGNORE_CASE)
             )
         ),
         IntentMatcher(
@@ -84,21 +84,46 @@ class CommandIntentEngine @Inject constructor() {
             )
         ),
 
-        // -- Apps -------------------------------------------------------------
+        // -- System Settings & Navigation -------------------------------------
+        IntentMatcher(
+            type = CommandIntentType.OPEN_SETTINGS,
+            patterns = listOf(
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:open|launch|go\s+to)\s+(?:the\s+)?(?:system\s+)?settings$""", RegexOption.IGNORE_CASE),
+                Regex("""^settings$""", RegexOption.IGNORE_CASE)
+            ),
+            paramExtractor = { mapOf("setting_type" to "settings") }
+        ),
+
+        // -- Apps Control (Module 2) ------------------------------------------
+        IntentMatcher(
+            type = CommandIntentType.LIST_APPS,
+            patterns = listOf(
+                Regex("""^(?:list\s+(?:all\s+)?apps|list\s+my\s+apps|show\s+(?:all\s+)?apps|what\s+apps\s+are\s+installed|show\s+my\s+apps|installed\s+apps)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
         IntentMatcher(
             type = CommandIntentType.OPEN_APP,
             patterns = listOf(
-                Regex("""^(?:open|launch|start|run)\s+(?:the\s+)?(.+)$""", RegexOption.IGNORE_CASE),
-                Regex("""^(?:go\s+to)\s+(.+)$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:open|launch|start|run|go\s+to)\s+(?:the\s+|my\s+)?(.+?)(?:\s+for\s+me|\s+app)?$""", RegexOption.IGNORE_CASE),
+                Regex("""^(?:search\s+my\s+apps\s+for|search\s+apps\s+for|find\s+app|find)\s+(.+)$""", RegexOption.IGNORE_CASE)
             ),
-            paramExtractor = { match -> mapOf("app_name" to match.groupValues[1].trim()) }
+            paramExtractor = { match ->
+                val rawName = match.groupValues[1].trim()
+                // Clean any trailing conversational tags
+                val cleanName = rawName.replace(Regex("""\s+(?:app|for\s+me|please)$""", RegexOption.IGNORE_CASE), "").trim()
+                mapOf("app_name" to cleanName)
+            }
         ),
         IntentMatcher(
             type = CommandIntentType.CLOSE_APP,
             patterns = listOf(
-                Regex("""^(?:close|kill)\s+(?:the\s+)?(.+)$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:close|kill|stop|force\s+stop)\s+(?:the\s+|my\s+)?(.+?)(?:\s+for\s+me|\s+app)?$""", RegexOption.IGNORE_CASE)
             ),
-            paramExtractor = { match -> mapOf("app_name" to match.groupValues[1].trim()) }
+            paramExtractor = { match ->
+                val rawName = match.groupValues[1].trim()
+                val cleanName = rawName.replace(Regex("""\s+(?:app|for\s+me|please)$""", RegexOption.IGNORE_CASE), "").trim()
+                mapOf("app_name" to cleanName)
+            }
         ),
 
         // -- Phone / Call -----------------------------------------------------
@@ -206,13 +231,7 @@ class CommandIntentEngine @Inject constructor() {
             )
         ),
 
-        // -- Quick Settings / System ------------------------------------------
-        IntentMatcher(
-            type = CommandIntentType.OPEN_SETTINGS,
-            patterns = listOf(
-                Regex("""^(?:open\s+settings|settings)$""", RegexOption.IGNORE_CASE)
-            )
-        ),
+        // -- Quick Settings / Toggles -----------------------------------------
         IntentMatcher(
             type = CommandIntentType.TOGGLE_FLASHLIGHT,
             patterns = listOf(

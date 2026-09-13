@@ -38,7 +38,8 @@ data class VoiceUiState(
     val availableVoices: List<VoiceInfo> = emptyList(),
     val availableLanguages: List<Locale> = emptyList(),
     val isSettingsSheetOpen: Boolean = false,
-    val isOnboardingOpen: Boolean = false
+    val isOnboardingOpen: Boolean = false,
+    val isApplicationsSheetOpen: Boolean = false
 )
 
 @HiltViewModel
@@ -153,6 +154,15 @@ class VoiceViewModel @Inject constructor(
     fun onTextCommandSubmitted(text: String) {
         if (text.isBlank()) return
         voiceEngine.processTextInput(text)
+    }
+
+
+    fun openApplicationsSheet() {
+        _uiState.update { it.copy(isApplicationsSheetOpen = true) }
+    }
+
+    fun closeApplicationsSheet() {
+        _uiState.update { it.copy(isApplicationsSheetOpen = false) }
     }
 
     fun openSettingsSheet() {
