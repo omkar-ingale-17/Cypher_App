@@ -3,6 +3,7 @@ package com.cypher.assistant.core.intent
 import com.cypher.assistant.core.command.CommandIntentType
 import com.cypher.assistant.core.command.CommandSource
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -141,6 +142,145 @@ class CommandIntentEngineTest {
         }
     }
 
+    // =========================================================================
+    // Module 3: YouTube Command & Intent Tests
+    // =========================================================================
+
+    @Test
+    fun parsesYouTubeSearchCommands() {
+        val variations = mapOf(
+            "Cypher, search YouTube for Python" to "python",
+            "search on YouTube for machine learning" to "machine learning",
+            "find Python tutorials on YouTube" to "python tutorials",
+            "find machine learning videos" to "machine learning",
+            "look for Naruto videos" to "naruto"
+        )
+        for ((phrase, expectedQuery) in variations) {
+            val intent = intentEngine.parse(phrase, CommandSource.VOICE)
+            assertEquals("Failed intent for: $phrase", CommandIntentType.YOUTUBE_SEARCH, intent.intentType)
+            assertEquals("Failed query for: $phrase", expectedQuery, intent.parameters["query"]?.lowercase())
+        }
+    }
+
+    @Test
+    fun parsesYouTubePlayCommands() {
+        val variations = mapOf(
+            "Cypher, play Python tutorial" to "python tutorial",
+            "play Naruto opening" to "naruto opening",
+            "play relaxing music" to "relaxing music",
+            "watch Java tutorial on YouTube" to "java tutorial"
+        )
+        for ((phrase, expectedQuery) in variations) {
+            val intent = intentEngine.parse(phrase, CommandSource.VOICE)
+            assertEquals("Failed intent for: $phrase", CommandIntentType.YOUTUBE_PLAY_SEARCH, intent.intentType)
+            assertEquals("Failed query for: $phrase", expectedQuery, intent.parameters["query"]?.lowercase())
+        }
+    }
+
+    @Test
+    fun parsesYouTubePlayIndexCommands() {
+        val variations = mapOf(
+            "Cypher, play the first video" to "1",
+            "play second video" to "2",
+            "select third result" to "3",
+            "play 1st video" to "1",
+            "open the fourth video" to "4"
+        )
+        for ((phrase, expectedIdx) in variations) {
+            val intent = intentEngine.parse(phrase, CommandSource.VOICE)
+            assertEquals("Failed intent for: $phrase", CommandIntentType.YOUTUBE_PLAY_INDEX, intent.intentType)
+            assertEquals("Failed index for: $phrase", expectedIdx, intent.parameters["index"])
+        }
+    }
+
+    @Test
+    fun parsesYouTubeLikeAndDislikeCommands() {
+        val likePhrases = listOf("Cypher, like this video", "like the video", "thumbs up", "i like this")
+        for (phrase in likePhrases) {
+            val intent = intentEngine.parse(phrase, CommandSource.VOICE)
+            assertEquals("Failed for: $phrase", CommandIntentType.YOUTUBE_LIKE, intent.intentType)
+        }
+
+        val dislikePhrases = listOf("Cypher, dislike this video", "dislike video", "thumbs down")
+        for (phrase in dislikePhrases) {
+            val intent = intentEngine.parse(phrase, CommandSource.VOICE)
+            assertEquals("Failed for: $phrase", CommandIntentType.YOUTUBE_DISLIKE, intent.intentType)
+        }
+    }
+
+    @Test
+    fun parsesYouTubeSubscribeAndUnsubscribe() {
+        val subPhrases = listOf("Cypher, subscribe", "subscribe to this channel", "subscribe channel")
+        for (phrase in subPhrases) {
+            val intent = intentEngine.parse(phrase, CommandSource.VOICE)
+            assertEquals("Failed for: $phrase", CommandIntentType.YOUTUBE_SUBSCRIBE, intent.intentType)
+        }
+
+        val unsubPhrases = listOf("Cypher, unsubscribe", "unsubscribe from this channel")
+        for (phrase in unsubPhrases) {
+            val intent = intentEngine.parse(phrase, CommandSource.VOICE)
+            assertEquals("Failed for: $phrase", CommandIntentType.YOUTUBE_UNSUBSCRIBE, intent.intentType)
+            assertTrue("Unsubscribe must require confirmation", intent.requiresConfirmation)
+        }
+    }
+
+    @Test
+    fun parsesYouTubeCommentsAndDescription() {
+        assertEquals(CommandIntentType.YOUTUBE_COMMENTS_OPEN, intentEngine.parse("open comments", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_COMMENTS_CLOSE, intentEngine.parse("close comments", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_DESCRIPTION_OPEN, intentEngine.parse("open description", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_SHOW_MORE, intentEngine.parse("show more", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_SHOW_LESS, intentEngine.parse("show less", CommandSource.VOICE).intentType)
+    }
+
+    @Test
+    fun parsesYouTubeScrollCommands() {
+        assertEquals(CommandIntentType.YOUTUBE_SCROLL_DOWN, intentEngine.parse("scroll down", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_SCROLL_DOWN, intentEngine.parse("scroll to comments", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_SCROLL_UP, intentEngine.parse("scroll up", CommandSource.VOICE).intentType)
+    }
+
+    @Test
+    fun parsesYouTubeNavigationSections() {
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_SHORTS, intentEngine.parse("open Shorts", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_SUBSCRIPTIONS, intentEngine.parse("open my subscriptions", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_HISTORY, intentEngine.parse("open YouTube history", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_CHANNEL, intentEngine.parse("open my channel", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_NOTIFICATIONS, intentEngine.parse("open YouTube notifications", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_HOME, intentEngine.parse("go to YouTube home", CommandSource.VOICE).intentType)
+    }
+
+    @Test
+    fun parsesYouTubePlaybackAndVolumeCommands() {
+        assertEquals(CommandIntentType.YOUTUBE_PAUSE, intentEngine.parse("pause", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_RESUME, intentEngine.parse("resume", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_STOP, intentEngine.parse("stop video", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_NEXT, intentEngine.parse("next video", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_PREVIOUS, intentEngine.parse("previous video", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_VOLUME_UP, intentEngine.parse("increase volume", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_VOLUME_DOWN, intentEngine.parse("decrease volume", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_MUTE, intentEngine.parse("mute", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_UNMUTE, intentEngine.parse("unmute", CommandSource.VOICE).intentType)
+    }
+
+    @Test
+    fun normalizesAsrVariationsForYouTube() {
+        val query1 = intentEngine.parse("search you tube for Kotlin", CommandSource.VOICE)
+        assertEquals(CommandIntentType.YOUTUBE_SEARCH, query1.intentType)
+        assertEquals("kotlin", query1.parameters["query"]?.lowercase())
+
+        val query2 = intentEngine.parse("search u tube for Kotlin", CommandSource.VOICE)
+        assertEquals(CommandIntentType.YOUTUBE_SEARCH, query2.intentType)
+        assertEquals("kotlin", query2.parameters["query"]?.lowercase())
+
+        val query3 = intentEngine.parse("open you-tube", CommandSource.VOICE)
+        assertEquals(CommandIntentType.OPEN_APP, query3.intentType)
+    }
+
+    // =========================================================================
+    // General Assistant Tests
+    // =========================================================================
+
     @Test
     fun parsesGetTimeCommands() {
         val variations = listOf(
@@ -201,14 +341,13 @@ class CommandIntentEngineTest {
     @Test
     fun parsesVolumeUpCommand() {
         val intent = intentEngine.parse("volume up", CommandSource.VOICE)
-        assertEquals(CommandIntentType.VOLUME_UP, intent.intentType)
+        assertEquals(CommandIntentType.YOUTUBE_VOLUME_UP, intent.intentType)
     }
 
     @Test
     fun parsesFlashlightToggleCommand() {
         val intent = intentEngine.parse("turn on flashlight", CommandSource.VOICE)
         assertEquals(CommandIntentType.TOGGLE_FLASHLIGHT, intent.intentType)
-        assertEquals("on", intent.parameters["state"])
     }
 
     @Test

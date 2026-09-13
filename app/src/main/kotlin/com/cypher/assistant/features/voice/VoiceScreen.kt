@@ -1,5 +1,7 @@
 package com.cypher.assistant.features.voice
 
+import com.cypher.assistant.features.youtube.presentation.YouTubeScreenDialog
+
 import com.cypher.assistant.features.applications.presentation.ApplicationScreen
 
 import android.Manifest
@@ -189,6 +191,7 @@ fun VoiceScreen(
                     wakeWordEnabled = uiState.userPreferences.wakeWordEnabled,
                     onUserClick = { showNameEditDialog = true },
                     onAppsClick = { viewModel.openApplicationsSheet() },
+                    onYouTubeClick = { viewModel.openYouTubeSheet() },
                     onSettingsClick = { viewModel.openSettingsSheet() }
                 )
 
@@ -275,6 +278,13 @@ fun VoiceScreen(
                 )
             }
 
+            // YouTube App Control Dialog
+            if (uiState.isYouTubeSheetOpen) {
+                YouTubeScreenDialog(
+                    onDismiss = { viewModel.closeYouTubeSheet() }
+                )
+            }
+
             // Application Control Dialog
             if (uiState.isApplicationsSheetOpen) {
                 androidx.compose.ui.window.Dialog(
@@ -317,6 +327,7 @@ private fun CypherTopBar(
     wakeWordEnabled: Boolean,
     onUserClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onYouTubeClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -414,6 +425,22 @@ private fun CypherTopBar(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+
+            IconButton(
+                onClick = onYouTubeClick,
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(CypherCardBg)
+                    .border(1.dp, Color(0xFFFF5252).copy(alpha = 0.6f), CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "YouTube Control",
+                    tint = Color(0xFFFF5252),
+                    modifier = Modifier.size(18.dp)
+                )
             }
 
             IconButton(
