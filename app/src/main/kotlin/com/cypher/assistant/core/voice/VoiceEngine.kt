@@ -9,7 +9,6 @@ import com.cypher.assistant.core.voice.tts.TTSEngine
 import com.cypher.assistant.core.voice.tts.VoiceInfo
 import com.cypher.assistant.core.voice.wake.WakePhraseResult
 import com.cypher.assistant.core.voice.wake.WakeWordDetector
-import com.cypher.assistant.data.preferences.UserPreferencesDataStore
 import com.cypher.assistant.data.repository.CommandHistoryRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,42 +21,41 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private const val TAG = "CypherVoiceEngine"
-
 /**
- * Production-grade Two-Stage Voice Orchestrator for Cypher AI:
+ * Orchestrator for the voice assistant lifecycle.
  *
- * STAGE 1: Wake-Word Listening (LISTENING_FOR_WAKE_WORD)
- * - Listens continuously for official wake words (cypher, cipher, jan, jaan, jann, baby)
- * - Immediate partial result detection latching
- * - Non-fatal automatic recovery on silence/timeouts
- *
- * STAGE 2: Command Listening & Execution (LISTENING_FOR_COMMAND -> PROCESSING -> SPEAKING)
- * - Captures intent, routes to handler, persists in Room DB, speaks response via TTS
- * - Seamlessly transitions back to Stage 1 upon speech completion
- *
- * MANUAL MODE:
- * - Direct tap on microphone bypasses Stage 1 and immediately initiates Stage 2
+ * Enforces the required state machine:
+ *  LISTENING (Mic ON)
+ *  → WAKE_WORD_DETECTED
+ *  → PROCESSING (Mic OFF)
+ *  → TTS SPEAKING (Mic OFF)
+ *  → TTS DONE
+ *  → MIC ON
+ *  → LISTENING (Continuous wake-word listening)
+ *  → Repeat forever.
  */
 @Singleton
 class VoiceEngine @Inject constructor(
     private val sttEngine: SpeechRecognizerEngine,
     private val ttsEngine: TTSEngine,
+    private val wakeDetector: WakeWordDetector,
     private val intentEngine: CommandIntentEngine,
     private val commandRouter: CommandRouter,
-    private val historyRepository: CommandHistoryRepository,
-    private val preferencesDataStore: UserPreferencesDataStore
+    private val historyRepository: CommandHistoryRepository
 ) {
-    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val wakeDetector = WakeWordDetector()
+
+    companion object {
+        private const val TAG = "CYPHER_VOICE"
+    }
+
+    private var engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val _voiceState = MutableStateFlow(VoiceState.IDLE)
     val voiceState: StateFlow<VoiceState> = _voiceState.asStateFlow()
@@ -68,7 +66,7 @@ class VoiceEngine @Inject constructor(
     private val _lastResponse = MutableStateFlow("")
     val lastResponse: StateFlow<String> = _lastResponse.asStateFlow()
 
-    private val _errorMessages = MutableSharedFlow<String>(extraBufferCapacity = 3)
+    private val _errorMessages = MutableSharedFlow<String>(extraBufferCapacity = 16)
     val errorMessages: SharedFlow<String> = _errorMessages.asSharedFlow()
 
     val rmsLevel: StateFlow<Float> = sttEngine.rmsLevel
@@ -76,337 +74,278 @@ class VoiceEngine @Inject constructor(
     val availableLanguages: StateFlow<List<Locale>> = ttsEngine.availableLanguages
 
     private var activeLocale: Locale = Locale.getDefault()
-    private var isContinuousListeningMode: Boolean = false
-    private var isWakeWordModeActive: Boolean = false
-
-    // Latch to prevent duplicate activations within the same utterance
-    private val isWakeWordTriggered = AtomicBoolean(false)
-
-    private var loopRestartJob: Job? = null
     private var processingJob: Job? = null
+    private var watchdogJob: Job? = null
+    private var isShutdown: Boolean = false
+
+    @Volatile
+    private var lastSttActivityTime: Long = System.currentTimeMillis()
 
     init {
         observeSttEvents()
+        startMicWatchdog()
+    }
+
+    /**
+     * Start a periodic watchdog that checks if the recognizer stalled
+     * while in wake-word or command listening mode.
+     */
+    private fun startMicWatchdog() {
+        watchdogJob?.cancel()
+        watchdogJob = engineScope.launch {
+            while (isActive) {
+                delay(20_000L) // check every 20s
+                if (isShutdown) break
+
+                val state = _voiceState.value
+                val isListeningState = state == VoiceState.LISTENING_FOR_WAKE_WORD ||
+                        state == VoiceState.LISTENING_FOR_COMMAND
+                val silentDuration = System.currentTimeMillis() - lastSttActivityTime
+
+                // If silent for > 35s while supposed to be listening and not speaking -> force re-arm
+                if (isListeningState && silentDuration > 35_000L && state != VoiceState.SPEAKING && state != VoiceState.PROCESSING) {
+                    Log.w(TAG, "CYPHER_VOICE: Watchdog detected silent stall (${silentDuration / 1000}s) -> re-arming recognizer")
+                    lastSttActivityTime = System.currentTimeMillis()
+                    sttEngine.startListening(locale = activeLocale, preferOffline = true)
+                }
+            }
+        }
     }
 
     private fun observeSttEvents() {
-        // 1. Observe partial results for low-latency wake-word triggers and live UI transcript
+        engineScope.launch {
+            sttEngine.recognizedEvents.collect { text ->
+                lastSttActivityTime = System.currentTimeMillis()
+                if (isShutdown) return@collect
+
+                // Drop STT events during speaking/processing to prevent feedback loops
+                val currentState = _voiceState.value
+                if (currentState == VoiceState.SPEAKING || currentState == VoiceState.PROCESSING) {
+                    Log.d(TAG, "CYPHER_VOICE: Dropping STT result during $currentState: \"$text\"")
+                    return@collect
+                }
+
+                _currentTranscript.value = text
+                handleFinalRecognizedSpeech(text)
+            }
+        }
+
         engineScope.launch {
             sttEngine.partialText.collect { partial ->
-                if (partial.isBlank()) return@collect
-
-                when (_voiceState.value) {
-                    VoiceState.LISTENING_FOR_WAKE_WORD -> {
-                        _currentTranscript.value = partial
-                        handlePartialWakeWord(partial)
-                    }
-                    VoiceState.LISTENING_FOR_COMMAND -> {
-                        _currentTranscript.value = partial
-                    }
-                    else -> Unit
+                lastSttActivityTime = System.currentTimeMillis()
+                if (isShutdown) return@collect
+                val state = _voiceState.value
+                if (state != VoiceState.SPEAKING && state != VoiceState.PROCESSING) {
+                    _currentTranscript.value = partial
                 }
             }
         }
 
-        // 2. Observe final recognized speech events
         engineScope.launch {
-            sttEngine.recognizedEvents.collect { finalSpeech ->
-                if (finalSpeech.isBlank()) return@collect
-                _currentTranscript.value = finalSpeech
-                handleFinalRecognizedSpeech(finalSpeech)
+            sttEngine.errorEvents.collect { errorMsg ->
+                lastSttActivityTime = System.currentTimeMillis()
+                if (isShutdown) return@collect
+                Log.w(TAG, "CYPHER_VOICE: STT error received: $errorMsg")
+                _errorMessages.emit(errorMsg)
             }
         }
 
-        // 3. Observe silence / recoverable timeout events for standby loop resumption
         engineScope.launch {
             sttEngine.silenceTimeoutEvents.collect {
-                handleSilenceOrTimeout()
-            }
-        }
-
-        // 4. Forward hard error notifications (e.g. missing permissions, network failures)
-        engineScope.launch {
-            sttEngine.errorEvents.collect { err ->
-                _errorMessages.emit(err)
+                lastSttActivityTime = System.currentTimeMillis()
             }
         }
     }
 
     /**
-     * Start Stage 1 (Wake-Word Listening) or continuous listening.
+     * Start wake-word or command listening.
      */
-    fun startListening(continuous: Boolean = false, requireWakePhrase: Boolean = true) {
-        isContinuousListeningMode = continuous
-        isWakeWordModeActive = requireWakePhrase
-        isWakeWordTriggered.set(false)
-        _currentTranscript.value = ""
-
-        if (ttsEngine.isSpeaking.value) {
-            ttsEngine.stop()
+    fun startListening(requireWakePhrase: Boolean = true, continuous: Boolean = true) {
+        if (isShutdown) {
+            isShutdown = false
+            if (!engineScope.isActive) {
+                engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+                observeSttEvents()
+                startMicWatchdog()
+            }
         }
 
-        if (requireWakePhrase) {
-            _voiceState.value = VoiceState.LISTENING_FOR_WAKE_WORD
-            Log.d(TAG, "CYPHER_VOICE: Starting STAGE 1 (Listening for wake word)")
+        lastSttActivityTime = System.currentTimeMillis()
+        _voiceState.value = if (requireWakePhrase) {
+            VoiceState.LISTENING_FOR_WAKE_WORD
         } else {
-            _voiceState.value = VoiceState.LISTENING_FOR_COMMAND
-            Log.d(TAG, "CYPHER_VOICE: Starting STAGE 2 directly (Manual command mode)")
+            VoiceState.LISTENING_FOR_COMMAND
         }
-
-        sttEngine.startListening(locale = activeLocale)
+        Log.i(TAG, "CYPHER_VOICE: LISTENING_STARTED (requireWakePhrase=$requireWakePhrase, continuous=$continuous)")
+        sttEngine.startListening(locale = activeLocale, preferOffline = true)
     }
 
     /**
-     * Start Stage 2 (Command Listening directly, e.g. after mic tap or wake-word acknowledgment).
+     * Ensures listening is active if Cypher is in a listening state.
+     * Called on screen unlock / screen on / audio focus regained.
      */
-    fun startCommandListening() {
-        isWakeWordModeActive = false
-        isWakeWordTriggered.set(false)
-        _currentTranscript.value = ""
+    fun ensureListeningActive() {
+        if (isShutdown) return
+        val state = _voiceState.value
+        if (state == VoiceState.LISTENING_FOR_WAKE_WORD || state == VoiceState.IDLE) {
+            Log.d(TAG, "CYPHER_VOICE: ensureListeningActive -> re-arming wake-word listening")
+            startListening(requireWakePhrase = true)
+        } else if (state == VoiceState.LISTENING_FOR_COMMAND) {
+            Log.d(TAG, "CYPHER_VOICE: ensureListeningActive -> re-arming command listening")
+            startListening(requireWakePhrase = false)
+        }
+    }
+
+    private fun startCommandListening() {
         _voiceState.value = VoiceState.LISTENING_FOR_COMMAND
-        Log.d(TAG, "CYPHER_VOICE: Starting STAGE 2 (Listening for command)")
-
-        if (ttsEngine.isSpeaking.value) {
-            ttsEngine.stop()
-        }
-
-        sttEngine.startListening(locale = activeLocale)
+        lastSttActivityTime = System.currentTimeMillis()
+        Log.i(TAG, "CYPHER_VOICE: Starting direct command listening (Stage 2)")
+        sttEngine.startListening(locale = activeLocale, preferOffline = true)
     }
 
-    /**
-     * Stop active voice capture and return to IDLE.
-     */
     fun stopListening() {
-        loopRestartJob?.cancel()
         sttEngine.stopListening()
-        if (_voiceState.value == VoiceState.LISTENING_FOR_WAKE_WORD ||
-            _voiceState.value == VoiceState.LISTENING_FOR_COMMAND
+        val state = _voiceState.value
+        if (state == VoiceState.LISTENING_FOR_WAKE_WORD ||
+            state == VoiceState.LISTENING_FOR_COMMAND
         ) {
             _voiceState.value = VoiceState.IDLE
         }
     }
 
-    /**
-     * Cancel listening, processing, and TTS immediately.
-     */
     fun cancel() {
-        loopRestartJob?.cancel()
         processingJob?.cancel()
-        isWakeWordTriggered.set(false)
         sttEngine.cancel()
         ttsEngine.stop()
         _voiceState.value = VoiceState.IDLE
     }
 
-    /**
-     * Process manually typed text command.
-     */
     fun processTextInput(text: String) {
-        if (text.isBlank()) return
+        if (text.isBlank() || isShutdown) return
         _currentTranscript.value = text
         _voiceState.value = VoiceState.PROCESSING
         executeCommandPipeline(text, CommandSource.TEXT)
     }
 
-    /**
-     * Evaluates partial results in Stage 1 to detect wake word immediately without waiting for speech silence.
-     */
-    private fun handlePartialWakeWord(partial: String) {
-        if (isWakeWordTriggered.get()) return
-
-        val detectedWord = wakeDetector.containsWakeWord(partial)
-        if (detectedWord != null && isWakeWordTriggered.compareAndSet(false, true)) {
-            Log.d(TAG, "CYPHER_VOICE: Wake word '$detectedWord' detected in partial result: '$partial'")
-
-            // Stop Stage 1 listening session safely
-            sttEngine.stopListening()
-
-            val result = wakeDetector.process(partial, requireWakePhrase = true)
-            handleWakeWordDetected(result, detectedWord)
-        }
-    }
-
-    /**
-     * Evaluates final recognized speech based on current voice state.
-     */
     private fun handleFinalRecognizedSpeech(rawSpeech: String) {
+        if (isShutdown) return
+        Log.d(TAG, "CYPHER_VOICE: Final transcript = \"$rawSpeech\" (state=${_voiceState.value})")
         when (_voiceState.value) {
             VoiceState.LISTENING_FOR_WAKE_WORD -> {
-                if (isWakeWordTriggered.get()) return // already triggered via partial
-
                 val result = wakeDetector.process(rawSpeech, requireWakePhrase = true)
                 when (result) {
-                    is WakePhraseResult.WakeOnly -> {
-                        if (isWakeWordTriggered.compareAndSet(false, true)) {
-                            handleWakeWordDetected(result, result.wakeWord)
-                        }
-                    }
                     is WakePhraseResult.WakeWithCommand -> {
-                        if (isWakeWordTriggered.compareAndSet(false, true)) {
-                            handleWakeWordDetected(result, result.wakeWord)
+                        Log.i(TAG, "CYPHER_VOICE: Wake word detected = ${result.wakeWord}, command = \"${result.commandPayload}\"")
+                        _voiceState.value = VoiceState.WAKE_WORD_DETECTED
+                        executeCommandPipeline(result.commandPayload, CommandSource.VOICE)
+                    }
+                    is WakePhraseResult.WakeOnly -> {
+                        Log.i(TAG, "CYPHER_VOICE: Standalone wake word = ${result.wakeWord}. Prompting...")
+                        _voiceState.value = VoiceState.WAKE_WORD_DETECTED
+                        engineScope.launch {
+                            val prompt = "Yes?"
+                            _lastResponse.value = prompt
+                            speakResponse(prompt)
+                            if (!isShutdown) {
+                                startCommandListening()
+                            }
                         }
                     }
                     is WakePhraseResult.DirectCommand,
                     is WakePhraseResult.None -> {
-                        // Non-wake word in standby mode -> schedule silent standby loop restart
-                        scheduleStandbyLoopRestart()
+                        Log.d(TAG, "CYPHER_VOICE: Non-wake speech in standby: \"$rawSpeech\" -> continuing wake-word listening")
+                        // IMPORTANT: Must restart/re-arm listening so mic stays ON!
+                        startListening(requireWakePhrase = true)
                     }
                 }
             }
 
             VoiceState.LISTENING_FOR_COMMAND -> {
-                // User spoke in command listening mode
-                _voiceState.value = VoiceState.PROCESSING
                 val result = wakeDetector.process(rawSpeech, requireWakePhrase = false)
                 val command = when (result) {
                     is WakePhraseResult.WakeWithCommand -> result.commandPayload
-                    is WakePhraseResult.DirectCommand -> result.commandPayload
-                    is WakePhraseResult.WakeOnly -> ""
-                    is WakePhraseResult.None -> rawSpeech
+                    is WakePhraseResult.DirectCommand   -> result.commandPayload
+                    is WakePhraseResult.WakeOnly        -> ""
+                    is WakePhraseResult.None            -> rawSpeech
                 }
-
                 if (command.isNotBlank()) {
+                    Log.i(TAG, "CYPHER_VOICE: Command detected = \"$command\"")
                     executeCommandPipeline(command, CommandSource.VOICE)
                 } else {
-                    // Empty command -> recover back to Stage 1 or IDLE
-                    scheduleRecoveryAfterEmptyCommand()
+                    // Empty speech -> return immediately to continuous wake-word listening
+                    startListening(requireWakePhrase = true)
                 }
             }
 
-            else -> Unit
-        }
-    }
-
-    /**
-     * Handles wake word detection trigger (Stage 1 -> Stage 2 transition or direct execution).
-     */
-    private fun handleWakeWordDetected(result: WakePhraseResult, wakeWord: String) {
-        _voiceState.value = VoiceState.WAKE_WORD_DETECTED
-        Log.d(TAG, "CYPHER_VOICE: Wake word detected = $wakeWord. Transitioning...")
-
-        when (result) {
-            is WakePhraseResult.WakeWithCommand -> {
-                // "Cypher, what is the time" -> execute command directly
-                executeCommandPipeline(result.commandPayload, CommandSource.VOICE)
-            }
             else -> {
-                // "Cypher" -> speak quick audio acknowledgment, then open command listener
-                engineScope.launch {
-                    val prompt = "I'm listening."
-                    _lastResponse.value = prompt
-                    speakResponse(prompt)
-                    // Brief audio drain delay before starting command recognition
-                    delay(250)
-                    startCommandListening()
-                }
+                Log.d(TAG, "CYPHER_VOICE: Speech received in state ${_voiceState.value} -> continuing listening")
+                startListening(requireWakePhrase = true)
             }
         }
     }
 
-    /**
-     * Handles silence, timeout, or recoverable speech recognition error.
-     */
-    private fun handleSilenceOrTimeout() {
-        when (_voiceState.value) {
-            VoiceState.LISTENING_FOR_WAKE_WORD -> {
-                // Continue Stage 1 standby loop
-                scheduleStandbyLoopRestart()
-            }
-            VoiceState.LISTENING_FOR_COMMAND -> {
-                // User timed out while in command mode -> return to Stage 1 if wake-word enabled, else IDLE
-                scheduleRecoveryAfterEmptyCommand()
-            }
-            else -> Unit
-        }
-    }
-
-    private fun scheduleStandbyLoopRestart() {
-        if (_voiceState.value != VoiceState.LISTENING_FOR_WAKE_WORD) return
-        loopRestartJob?.cancel()
-        loopRestartJob = engineScope.launch {
-            delay(150)
-            if (_voiceState.value == VoiceState.LISTENING_FOR_WAKE_WORD) {
-                isWakeWordTriggered.set(false)
-                Log.d(TAG, "CYPHER_VOICE: Restarting wake-word listener loop")
-                sttEngine.startListening(locale = activeLocale)
-            }
-        }
-    }
-
-    private fun scheduleRecoveryAfterEmptyCommand() {
-        engineScope.launch {
-            val prefs = preferencesDataStore.userPreferences.first()
-            if (prefs.wakeWordEnabled || isContinuousListeningMode) {
-                delay(200)
-                startListening(
-                    continuous = prefs.continuousListening,
-                    requireWakePhrase = true
-                )
-            } else {
-                _voiceState.value = VoiceState.IDLE
-            }
-        }
-    }
-
-    /**
-     * Executes the intent parsing, command routing, history persistence, and TTS playback pipeline.
-     */
     private fun executeCommandPipeline(commandText: String, source: CommandSource) {
+        if (isShutdown) return
         processingJob?.cancel()
         processingJob = engineScope.launch {
             try {
                 _voiceState.value = VoiceState.PROCESSING
-                Log.d(TAG, "CYPHER_VOICE: Processing command = '$commandText' from $source")
+                Log.i(TAG, "CYPHER_VOICE: Processing command = \"$commandText\" from $source")
 
                 // 1. Intent Parsing
                 val intent = intentEngine.parse(commandText, source)
-                Log.d(TAG, "CYPHER_VOICE: Intent parsed = ${intent.intentType} (params=${intent.parameters})")
+                Log.d(TAG, "CYPHER_VOICE: Intent = ${intent.intentType}")
 
                 // 2. Route & Execute
                 val result = commandRouter.route(intent)
                 _lastResponse.value = result.message
+                Log.i(TAG, "CYPHER_VOICE: Response generated = \"${result.message}\"")
 
-                // 3. Persist record in Room database
+                // 3. Persist
                 historyRepository.record(intent, result)
 
-                // 4. TTS Feedback
+                // 4. TTS -> speaks response while microphone is paused (MIC OFF -> TTS -> MIC ON)
                 speakResponse(result.message)
 
-                // 5. Post-command lifecycle: return to Stage 1 wake-word standby or IDLE
-                val prefs = preferencesDataStore.userPreferences.first()
-                if (prefs.wakeWordEnabled || isContinuousListeningMode) {
-                    delay(350)
-                    startListening(
-                        continuous = prefs.continuousListening,
-                        requireWakePhrase = true
-                    )
-                } else {
-                    _voiceState.value = VoiceState.IDLE
+                // 5. Return to continuous wake-word listening
+                if (isShutdown) return@launch
+                Log.i(TAG, "CYPHER_VOICE: TTS completed -> returning to continuous wake-word listening")
+                delay(200L) // brief settling delay before mic restarts
+                if (!isShutdown) {
+                    startListening(requireWakePhrase = true)
                 }
+
             } catch (e: Exception) {
-                Log.e(TAG, "CYPHER_VOICE: Error executing command pipeline", e)
-                val errMsg = "An error occurred while executing the command."
-                _lastResponse.value = errMsg
+                if (isShutdown) return@launch
+                Log.e(TAG, "CYPHER_VOICE: Error in command pipeline", e)
                 _voiceState.value = VoiceState.ERROR
-                _errorMessages.emit(errMsg)
+                _errorMessages.emit("An error occurred.")
+                delay(400L)
+                if (!isShutdown) {
+                    startListening(requireWakePhrase = true)
+                }
             }
         }
     }
 
     /**
-     * Speaks response text via TTS while pausing the microphone to prevent feedback.
+     * Speaks response via TTS while microphone is paused.
+     * Flow: MIC OFF -> TTS SPEAKING -> TTS DONE -> MIC ON
      */
     private suspend fun speakResponse(text: String) {
-        if (text.isBlank()) return
-        _voiceState.value = VoiceState.SPEAKING
-        sttEngine.cancel() // Stop STT during TTS to avoid echo feedback
+        if (text.isBlank() || isShutdown) return
 
+        _voiceState.value = VoiceState.SPEAKING
+        sttEngine.cancel() // pauses recognizer & logs MIC_OFF
+        delay(200L) // allow cancel to settle and mic audio buffer to clear
+
+        Log.d(TAG, "CYPHER_TTS: Speaking = \"${text.take(80)}\"")
         try {
-            withTimeoutOrNull(8000L) {
+            withTimeoutOrNull(35_000L) {
                 ttsEngine.speak(text)
-            }
+            } ?: Log.w(TAG, "CYPHER_TTS: TTS timed out after 35s for \"${text.take(60)}\"")
         } catch (e: Exception) {
-            Log.e(TAG, "CYPHER_VOICE: TTS playback error", e)
+            Log.e(TAG, "CYPHER_TTS: TTS error", e)
         }
     }
 
@@ -428,8 +367,12 @@ class VoiceEngine @Inject constructor(
     }
 
     fun shutdown() {
-        cancel()
+        isShutdown = true
+        watchdogJob?.cancel()
+        processingJob?.cancel()
         sttEngine.destroy()
         ttsEngine.shutdown()
+        _voiceState.value = VoiceState.IDLE
+        Log.i(TAG, "CYPHER_VOICE: VoiceEngine shutdown completed")
     }
 }

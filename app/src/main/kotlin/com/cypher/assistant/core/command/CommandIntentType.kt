@@ -12,6 +12,8 @@ enum class CommandIntentType {
     ASSISTANT_CAPABILITIES,
     SET_USER_NAME,
     GET_USER_NAME,
+    GET_TIME,
+    GET_DATE,
     THANK_YOU,
     GOODBYE,
 

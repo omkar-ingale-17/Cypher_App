@@ -25,29 +25,30 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private const val TAG = "CypherSTT"
-
 /**
- * Production-grade SpeechRecognizer implementation for Cypher AI.
- *
- * Designed with:
- * - Robust error classification (treating NO_MATCH/TIMEOUT as recoverable non-fatal events)
- * - Safe instance recycling on ERROR_RECOGNIZER_BUSY & SERVER_DISCONNECTED
- * - Main-Looper bound execution guarantees
- * - Audio-reactive RMS forwarding for visualizer animations
- * - Instant partial result delivery for low-latency wake-word triggers
+ * Production-ready SpeechRecognizerEngine implementation for Android.
+ * Enforces single SpeechRecognizer instance lifecycle, controlled continuous re-arming,
+ * main-thread looper safety, and structured lifecycle logging.
  */
 @Singleton
 class AndroidSpeechRecognizerEngine @Inject constructor(
     @ApplicationContext private val context: Context
 ) : SpeechRecognizerEngine {
 
+    companion object {
+        private const val TAG = "CYPHER_VOICE"
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var speechRecognizer: SpeechRecognizer? = null
-    private var isListening = false
-    private var isCreating = false
+    private var isListening: Boolean = false
+    private var isContinuousActive: Boolean = false
+    private var isDestroyed: Boolean = false
+
+    private var currentLocale: Locale = Locale.getDefault()
+    private var currentPreferOffline: Boolean = false
 
     private val _state = MutableStateFlow(VoiceState.IDLE)
     override val state: StateFlow<VoiceState> = _state.asStateFlow()
@@ -61,102 +62,139 @@ class AndroidSpeechRecognizerEngine @Inject constructor(
     private val _rmsLevel = MutableStateFlow(0f)
     override val rmsLevel: StateFlow<Float> = _rmsLevel.asStateFlow()
 
-    private val _recognizedEvents = MutableSharedFlow<String>(extraBufferCapacity = 5)
+    private val _recognizedEvents = MutableSharedFlow<String>(extraBufferCapacity = 64)
     override val recognizedEvents: SharedFlow<String> = _recognizedEvents.asSharedFlow()
 
-    private val _errorEvents = MutableSharedFlow<String>(extraBufferCapacity = 3)
+    private val _errorEvents = MutableSharedFlow<String>(extraBufferCapacity = 16)
     override val errorEvents: SharedFlow<String> = _errorEvents.asSharedFlow()
 
-    private val _silenceTimeoutEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 3)
+    private val _silenceTimeoutEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
     override val silenceTimeoutEvents: SharedFlow<Unit> = _silenceTimeoutEvents.asSharedFlow()
 
-    override fun isAvailable(): Boolean = SpeechRecognizer.isRecognitionAvailable(context)
-
-    private fun getOrCreateRecognizer(): SpeechRecognizer? {
-        if (speechRecognizer == null && !isCreating) {
-            isCreating = true
-            try {
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-                    setRecognitionListener(createRecognitionListener())
-                }
-                Log.d(TAG, "CYPHER_VOICE: Recognizer created")
-            } catch (e: Exception) {
-                Log.e(TAG, "CYPHER_VOICE: Failed to create SpeechRecognizer instance", e)
-                speechRecognizer = null
-            } finally {
-                isCreating = false
-            }
-        }
-        return speechRecognizer
+    private val rearmRunnable = Runnable {
+        executeRearm()
     }
 
-    override fun startListening(locale: Locale, preferOffline: Boolean) {
+    override fun isAvailable(): Boolean {
+        return SpeechRecognizer.isRecognitionAvailable(context)
+    }
+
+    private fun getOrCreateRecognizer(): SpeechRecognizer? {
+        if (speechRecognizer != null) return speechRecognizer
+        return try {
+            val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+            recognizer.setRecognitionListener(createRecognitionListener())
+            speechRecognizer = recognizer
+            Log.i(TAG, "CYPHER_VOICE: RECOGNIZER_CREATED")
+            recognizer
+        } catch (e: Exception) {
+            Log.e(TAG, "CYPHER_VOICE: Failed to create SpeechRecognizer", e)
+            null
+        }
+    }
+
+    private fun buildRecognizerIntent(locale: Locale, preferOffline: Boolean): Intent {
+        return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, locale.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+
+            if (preferOffline) {
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            }
+
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 300L)
+        }
+    }
+
+    override fun startListening(
+        locale: Locale,
+        preferOffline: Boolean
+    ) {
+        currentLocale = locale
+        currentPreferOffline = preferOffline
+        isContinuousActive = true
+        isDestroyed = false
+
+        mainHandler.removeCallbacks(rearmRunnable)
         mainHandler.post {
+            if (isDestroyed || !isContinuousActive) return@post
             try {
-                if (!isAvailable()) {
-                    val msg = "Speech recognition service is unavailable on this device."
-                    Log.e(TAG, "CYPHER_VOICE: $msg")
-                    _state.value = VoiceState.ERROR
-                    scope.launch { _errorEvents.emit(msg) }
+                // Cancel any previous session to ensure clean state
+                try { speechRecognizer?.cancel() } catch (_: Exception) {}
+
+                val recognizer = getOrCreateRecognizer() ?: run {
+                    Log.e(TAG, "CYPHER_VOICE: Speech recognition not available on device")
+                    scope.launch { _errorEvents.emit("Speech recognition not available") }
                     return@post
                 }
 
-                // If currently active, cancel previous session cleanly
-                if (isListening) {
-                    try {
-                        speechRecognizer?.cancel()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "CYPHER_VOICE: Exception cancelling prior recognition session", e)
-                    }
-                    isListening = false
-                }
-
-                val recognizer = getOrCreateRecognizer()
-                if (recognizer == null) {
-                    val msg = "Could not initialize speech recognizer."
-                    Log.e(TAG, "CYPHER_VOICE: $msg")
-                    _state.value = VoiceState.ERROR
-                    scope.launch { _errorEvents.emit(msg) }
-                    return@post
-                }
-
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(
-                        RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                    )
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale.toLanguageTag())
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-                    if (preferOffline) {
-                        putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-                    }
-                }
-
-                _recognizedText.value = ""
-                _partialText.value = ""
-                _rmsLevel.value = 0f
+                val intent = buildRecognizerIntent(locale, preferOffline)
                 isListening = true
-
+                Log.i(TAG, "CYPHER_VOICE: MIC_ON")
+                Log.i(TAG, "CYPHER_VOICE: LISTENING_STARTED (locale=${locale.toLanguageTag()})")
                 recognizer.startListening(intent)
-                Log.d(TAG, "CYPHER_VOICE: Starting listening (locale=${locale.toLanguageTag()}, offline=$preferOffline)")
             } catch (e: Exception) {
-                Log.e(TAG, "CYPHER_VOICE: Failed to start speech recognition", e)
+                Log.e(TAG, "CYPHER_VOICE: Error starting SpeechRecognizer", e)
                 isListening = false
-                _state.value = VoiceState.IDLE
-                safeDestroy()
-                scope.launch { _silenceTimeoutEvents.emit(Unit) }
+                rearmContinuously(delayMs = 250L)
+            }
+        }
+    }
+
+    /**
+     * Seamlessly and safely re-arms the recognition session for continuous listening.
+     */
+    fun rearmContinuously(delayMs: Long = 0L) {
+        if (isDestroyed || !isContinuousActive) return
+
+        mainHandler.removeCallbacks(rearmRunnable)
+
+        if (delayMs <= 0L) {
+            mainHandler.post(rearmRunnable)
+        } else {
+            mainHandler.postDelayed(rearmRunnable, delayMs)
+        }
+    }
+
+    private fun executeRearm() {
+        if (isDestroyed || !isContinuousActive) return
+        isListening = false
+        try {
+            // Cancel active session before re-arming
+            try { speechRecognizer?.cancel() } catch (_: Exception) {}
+
+            val recognizer = getOrCreateRecognizer() ?: return
+            val intent = buildRecognizerIntent(currentLocale, currentPreferOffline)
+            isListening = true
+            Log.i(TAG, "CYPHER_VOICE: RECOGNIZER_RESTART")
+            Log.i(TAG, "CYPHER_VOICE: MIC_ON")
+            Log.i(TAG, "CYPHER_VOICE: LISTENING_STARTED")
+            recognizer.startListening(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "CYPHER_VOICE: Error during recognizer re-arm, recreating recognizer in 300ms", e)
+            isListening = false
+            safeDestroy()
+            if (!isDestroyed && isContinuousActive) {
+                mainHandler.postDelayed(rearmRunnable, 300L)
             }
         }
     }
 
     override fun stopListening() {
+        isContinuousActive = false
+        mainHandler.removeCallbacks(rearmRunnable)
         mainHandler.post {
             try {
                 isListening = false
                 speechRecognizer?.stopListening()
-                Log.d(TAG, "CYPHER_VOICE: stopListening called")
+                Log.i(TAG, "CYPHER_VOICE: MIC_OFF")
+                Log.i(TAG, "CYPHER_VOICE: LISTENING_ENDED")
             } catch (e: Exception) {
                 Log.e(TAG, "CYPHER_VOICE: Error stopping SpeechRecognizer", e)
             }
@@ -164,13 +202,16 @@ class AndroidSpeechRecognizerEngine @Inject constructor(
     }
 
     override fun cancel() {
+        isContinuousActive = false
+        mainHandler.removeCallbacks(rearmRunnable)
         mainHandler.post {
             try {
                 isListening = false
                 speechRecognizer?.cancel()
                 _rmsLevel.value = 0f
                 _partialText.value = ""
-                Log.d(TAG, "CYPHER_VOICE: cancel called")
+                Log.i(TAG, "CYPHER_VOICE: MIC_OFF")
+                Log.i(TAG, "CYPHER_VOICE: LISTENING_ENDED (cancelled)")
             } catch (e: Exception) {
                 Log.e(TAG, "CYPHER_VOICE: Error cancelling SpeechRecognizer", e)
             }
@@ -180,7 +221,7 @@ class AndroidSpeechRecognizerEngine @Inject constructor(
     private fun safeDestroy() {
         try {
             speechRecognizer?.destroy()
-            Log.d(TAG, "CYPHER_VOICE: Recognizer destroyed safely")
+            Log.i(TAG, "CYPHER_VOICE: RECOGNIZER_DESTROYED")
         } catch (e: Exception) {
             Log.w(TAG, "CYPHER_VOICE: Exception during SpeechRecognizer destruction", e)
         } finally {
@@ -190,7 +231,12 @@ class AndroidSpeechRecognizerEngine @Inject constructor(
     }
 
     override fun destroy() {
+        isContinuousActive = false
+        mainHandler.removeCallbacks(rearmRunnable)
         mainHandler.post {
+            isDestroyed = true
+            Log.i(TAG, "CYPHER_VOICE: MIC_OFF")
+            Log.i(TAG, "CYPHER_VOICE: LISTENING_ENDED (destroyed)")
             safeDestroy()
             _rmsLevel.value = 0f
             _partialText.value = ""
@@ -200,16 +246,18 @@ class AndroidSpeechRecognizerEngine @Inject constructor(
 
     private fun createRecognitionListener() = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
-            Log.d(TAG, "CYPHER_VOICE: onReadyForSpeech")
+            if (isDestroyed) return
+            Log.d(TAG, "CYPHER_VOICE: onReadyForSpeech - mic actively capturing")
             isListening = true
         }
 
         override fun onBeginningOfSpeech() {
+            if (isDestroyed) return
             Log.d(TAG, "CYPHER_VOICE: onBeginningOfSpeech")
         }
 
         override fun onRmsChanged(rmsdB: Float) {
-            // Normalize typical RMS range [-2.0dB .. 10.0dB] to [0.0 .. 1.0]
+            if (isDestroyed) return
             val normalized = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
             _rmsLevel.value = normalized
         }
@@ -217,7 +265,8 @@ class AndroidSpeechRecognizerEngine @Inject constructor(
         override fun onBufferReceived(buffer: ByteArray?) {}
 
         override fun onEndOfSpeech() {
-            Log.d(TAG, "CYPHER_VOICE: onEndOfSpeech")
+            if (isDestroyed) return
+            Log.i(TAG, "CYPHER_VOICE: LISTENING_ENDED (end of speech)")
             isListening = false
             _rmsLevel.value = 0f
         }
@@ -225,31 +274,37 @@ class AndroidSpeechRecognizerEngine @Inject constructor(
         override fun onError(errorCode: Int) {
             isListening = false
             _rmsLevel.value = 0f
+            if (isDestroyed) return
+
+            Log.w(TAG, "CYPHER_VOICE: RECOGNIZER_ERROR (code=$errorCode)")
 
             when (errorCode) {
-                // Normal silence/timeout events in Android SpeechRecognizer
+                // Routine silence or end-of-turn in continuous listening -> seamlessly re-arm
                 SpeechRecognizer.ERROR_NO_MATCH,
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
-                    Log.d(TAG, "CYPHER_VOICE: SpeechRecognizer silence/timeout (code=$errorCode). Non-fatal, continuing loop.")
-                    scope.launch { _silenceTimeoutEvents.emit(Unit) }
+                    if (isContinuousActive) {
+                        rearmContinuously(delayMs = 50L)
+                    }
                 }
 
-                // Speech service busy -> Safely recycle instance and notify loop
+                // Recognizer busy -> cancel active and re-arm with brief settling delay
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
-                    Log.w(TAG, "CYPHER_VOICE: SpeechRecognizer busy (code=8). Resetting instance.")
-                    safeDestroy()
-                    scope.launch { _silenceTimeoutEvents.emit(Unit) }
+                    try { speechRecognizer?.cancel() } catch (_: Exception) {}
+                    if (isContinuousActive) {
+                        rearmContinuously(delayMs = 250L)
+                    }
                 }
 
-                // Server or client disconnection -> Reset instance and notify loop
+                // Server or client disconnection -> recreate recognizer and re-arm
                 SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
                 SpeechRecognizer.ERROR_CLIENT -> {
-                    Log.w(TAG, "CYPHER_VOICE: SpeechRecognizer client/server issue (code=$errorCode). Resetting instance.")
                     safeDestroy()
-                    scope.launch { _silenceTimeoutEvents.emit(Unit) }
+                    if (isContinuousActive) {
+                        rearmContinuously(delayMs = 200L)
+                    }
                 }
 
-                // Permission error -> User-facing
+                // Insufficient permissions -> emit user-facing notification
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> {
                     val msg = "Microphone permission is required."
                     Log.e(TAG, "CYPHER_VOICE: $msg (code=$errorCode)")
@@ -257,21 +312,19 @@ class AndroidSpeechRecognizerEngine @Inject constructor(
                     scope.launch { _errorEvents.emit(msg) }
                 }
 
-                // Network error -> User-facing recoverable warning
+                // Network error -> Continue listening with backoff
                 SpeechRecognizer.ERROR_NETWORK,
                 SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> {
-                    val msg = "Network connection issue with speech service."
-                    Log.w(TAG, "CYPHER_VOICE: $msg (code=$errorCode)")
-                    scope.launch {
-                        _errorEvents.emit(msg)
-                        _silenceTimeoutEvents.emit(Unit)
+                    if (isContinuousActive) {
+                        rearmContinuously(delayMs = 500L)
                     }
                 }
 
                 else -> {
-                    Log.w(TAG, "CYPHER_VOICE: SpeechRecognizer error code: $errorCode")
-                    safeDestroy()
-                    scope.launch { _silenceTimeoutEvents.emit(Unit) }
+                    try { speechRecognizer?.cancel() } catch (_: Exception) {}
+                    if (isContinuousActive) {
+                        rearmContinuously(delayMs = 200L)
+                    }
                 }
             }
         }
@@ -279,9 +332,11 @@ class AndroidSpeechRecognizerEngine @Inject constructor(
         override fun onResults(results: Bundle?) {
             isListening = false
             _rmsLevel.value = 0f
+            if (isDestroyed) return
+
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim().orEmpty()
-            Log.d(TAG, "CYPHER_VOICE: Final result = $text (candidates=${matches?.size})")
+            Log.i(TAG, "CYPHER_VOICE: RECOGNIZER_RESULTS (candidates=${matches?.size}) = \"$text\"")
 
             _recognizedText.value = text
             _partialText.value = text
@@ -289,15 +344,17 @@ class AndroidSpeechRecognizerEngine @Inject constructor(
             if (text.isNotBlank()) {
                 scope.launch { _recognizedEvents.emit(text) }
             } else {
-                scope.launch { _silenceTimeoutEvents.emit(Unit) }
+                if (isContinuousActive) {
+                    rearmContinuously(delayMs = 50L)
+                }
             }
         }
 
         override fun onPartialResults(partialResults: Bundle?) {
+            if (isDestroyed) return
             val partial = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 ?.firstOrNull()?.trim().orEmpty()
             if (partial.isNotBlank()) {
-                Log.d(TAG, "CYPHER_VOICE: Partial result = $partial")
                 _partialText.value = partial
             }
         }

@@ -66,6 +66,37 @@ class CommandIntentEngineTest {
     }
 
     @Test
+    fun parsesGetTimeCommands() {
+        val variations = listOf(
+            "what is the time",
+            "what's the time",
+            "what time is it",
+            "current time",
+            "tell me the time",
+            "time please"
+        )
+        for (v in variations) {
+            val intent = intentEngine.parse(v, CommandSource.VOICE)
+            assertEquals("Failed for variation: $v", CommandIntentType.GET_TIME, intent.intentType)
+        }
+    }
+
+    @Test
+    fun parsesGetDateCommands() {
+        val variations = listOf(
+            "what is the date",
+            "what's the date",
+            "what's today's date",
+            "what day is today",
+            "tell me the date"
+        )
+        for (v in variations) {
+            val intent = intentEngine.parse(v, CommandSource.VOICE)
+            assertEquals("Failed for variation: $v", CommandIntentType.GET_DATE, intent.intentType)
+        }
+    }
+
+    @Test
     fun parsesThankYouCommand() {
         val intent = intentEngine.parse("thank you", CommandSource.VOICE)
         assertEquals(CommandIntentType.THANK_YOU, intent.intentType)

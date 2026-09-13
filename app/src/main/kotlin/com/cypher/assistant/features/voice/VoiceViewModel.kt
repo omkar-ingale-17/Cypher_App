@@ -1,5 +1,6 @@
 package com.cypher.assistant.features.voice
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cypher.assistant.core.voice.VoiceEngine
@@ -9,12 +10,14 @@ import com.cypher.assistant.data.database.entities.CommandHistoryEntity
 import com.cypher.assistant.data.preferences.UserPreferences
 import com.cypher.assistant.data.preferences.UserPreferencesDataStore
 import com.cypher.assistant.data.repository.CommandHistoryRepository
+import com.cypher.assistant.services.voice.VoiceAssistantService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -22,20 +25,20 @@ import java.util.Locale
 import javax.inject.Inject
 
 /**
- * UI State for the Voice Assistant screen.
+ * UI State for [VoiceScreen] in a pure hands-free, wake-word-activated paradigm.
  */
 data class VoiceUiState(
     val voiceState: VoiceState = VoiceState.IDLE,
     val liveTranscript: String = "",
     val lastResponse: String = "",
-    val statusMessage: String = "Tap mic to speak or say Cypher",
+    val statusMessage: String = "Say 'Cypher', 'Jan', 'Jaan', or 'Baby'",
     val rmsLevel: Float = 0f,
-    val isSettingsSheetOpen: Boolean = false,
-    val isOnboardingOpen: Boolean = false,
     val errorMessage: String? = null,
     val userPreferences: UserPreferences = UserPreferences(),
     val availableVoices: List<VoiceInfo> = emptyList(),
-    val availableLanguages: List<Locale> = emptyList()
+    val availableLanguages: List<Locale> = emptyList(),
+    val isSettingsSheetOpen: Boolean = false,
+    val isOnboardingOpen: Boolean = false
 )
 
 @HiltViewModel
@@ -70,13 +73,13 @@ class VoiceViewModel @Inject constructor(
                 voiceEngine.rmsLevel
             ) { state, transcript, response, rms ->
                 val statusText = when (state) {
-                    VoiceState.IDLE -> "Tap mic to speak or say Cypher"
+                    VoiceState.IDLE -> "Say 'Cypher', 'Jan', 'Jaan', or 'Baby' to activate"
                     VoiceState.LISTENING_FOR_WAKE_WORD -> "Listening for wake word..."
                     VoiceState.WAKE_WORD_DETECTED -> "Wake word detected"
-                    VoiceState.LISTENING_FOR_COMMAND -> "Listening... Speak now"
+                    VoiceState.LISTENING_FOR_COMMAND -> "Listening for command..."
                     VoiceState.PROCESSING -> "Processing command..."
                     VoiceState.SPEAKING -> "Speaking response..."
-                    VoiceState.ERROR -> "Voice error occurred"
+                    VoiceState.ERROR -> "Say 'Cypher' to activate"
                 }
 
                 _uiState.update { current ->
@@ -134,41 +137,15 @@ class VoiceViewModel @Inject constructor(
         }
     }
 
-    fun startStandbyListening() {
+    fun startStandbyListening(context: Context? = null) {
         val prefs = _uiState.value.userPreferences
-        if (prefs.wakeWordEnabled && _uiState.value.voiceState == VoiceState.IDLE) {
-            voiceEngine.startListening(
-                continuous = prefs.continuousListening,
-                requireWakePhrase = true
-            )
-        }
-    }
-
-    fun onMicTapped(hasMicrophonePermission: Boolean) {
-        if (!hasMicrophonePermission) {
-            _uiState.update {
-                it.copy(
-                    errorMessage = "Microphone permission is required for voice commands.",
-                    voiceState = VoiceState.ERROR
+        if (prefs.wakeWordEnabled) {
+            if (context != null) {
+                VoiceAssistantService.start(context)
+            } else if (_uiState.value.voiceState == VoiceState.IDLE) {
+                voiceEngine.startListening(
+                    requireWakePhrase = true
                 )
-            }
-            return
-        }
-
-        when (_uiState.value.voiceState) {
-            VoiceState.LISTENING_FOR_WAKE_WORD,
-            VoiceState.IDLE,
-            VoiceState.ERROR -> {
-                // Manual tap immediately starts Stage 2 (command listening)
-                voiceEngine.startCommandListening()
-            }
-            VoiceState.LISTENING_FOR_COMMAND -> {
-                voiceEngine.stopListening()
-            }
-            VoiceState.SPEAKING,
-            VoiceState.PROCESSING,
-            VoiceState.WAKE_WORD_DETECTED -> {
-                voiceEngine.cancel()
             }
         }
     }
@@ -235,13 +212,22 @@ class VoiceViewModel @Inject constructor(
         }
     }
 
-    fun onToggleWakeWord(enabled: Boolean) {
+    fun onToggleWakeWord(enabled: Boolean, context: Context? = null) {
         viewModelScope.launch {
             preferencesDataStore.setWakeWordEnabled(enabled)
             if (enabled) {
-                startStandbyListening()
-            } else if (_uiState.value.voiceState == VoiceState.LISTENING_FOR_WAKE_WORD) {
-                voiceEngine.stopListening()
+                if (context != null) {
+                    VoiceAssistantService.start(context)
+                } else {
+                    startStandbyListening()
+                }
+            } else {
+                if (context != null) {
+                    VoiceAssistantService.stop(context)
+                }
+                if (_uiState.value.voiceState == VoiceState.LISTENING_FOR_WAKE_WORD) {
+                    voiceEngine.stopListening()
+                }
             }
         }
     }
@@ -261,6 +247,12 @@ class VoiceViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        voiceEngine.cancel()
+        // Do not cancel voiceEngine if background service is enabled
+        viewModelScope.launch {
+            val prefs = preferencesDataStore.userPreferences.first()
+            if (!prefs.wakeWordEnabled && !prefs.continuousListening) {
+                voiceEngine.cancel()
+            }
+        }
     }
 }

@@ -8,7 +8,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -48,9 +47,9 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -74,7 +73,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -150,7 +148,7 @@ fun VoiceScreen(
     ) { isGranted ->
         hasMicPermission = isGranted
         if (isGranted) {
-            viewModel.startStandbyListening()
+            viewModel.startStandbyListening(context)
         }
     }
 
@@ -158,7 +156,7 @@ fun VoiceScreen(
         if (!hasMicPermission) {
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         } else {
-            viewModel.startStandbyListening()
+            viewModel.startStandbyListening(context)
         }
     }
 
@@ -215,14 +213,7 @@ fun VoiceScreen(
                 ) {
                     CypherGlowingOrb(
                         voiceState = uiState.voiceState,
-                        rmsLevel = uiState.rmsLevel,
-                        onClick = {
-                            if (!hasMicPermission) {
-                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            } else {
-                                viewModel.onMicTapped(hasMicrophonePermission = true)
-                            }
-                        }
+                        rmsLevel = uiState.rmsLevel
                     )
                 }
 
@@ -290,7 +281,7 @@ fun VoiceScreen(
                     onVoiceSelected = { viewModel.onVoiceSelected(it) },
                     onSpeechRateChanged = { viewModel.onSpeechRateChanged(it) },
                     onPitchChanged = { viewModel.onPitchChanged(it) },
-                    onToggleWakeWord = { viewModel.onToggleWakeWord(it) },
+                    onToggleWakeWord = { viewModel.onToggleWakeWord(it, context) },
                     onToggleContinuous = { viewModel.onToggleContinuousListening(it) },
                     onEditName = {
                         viewModel.closeSettingsSheet()
@@ -364,7 +355,7 @@ private fun CypherTopBar(
                             )
                     )
                     Text(
-                        text = if (wakeWordEnabled) "WAKE PHRASE ACTIVE" else "TAP TO ACTIVATE",
+                        text = if (wakeWordEnabled) "WAKE PHRASE ACTIVE" else "WAKE PHRASE PAUSED",
                         color = if (wakeWordEnabled) CypherGreen else CypherTextSecondary,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -430,7 +421,6 @@ private fun CypherTopBar(
 private fun CypherGlowingOrb(
     voiceState: VoiceState,
     rmsLevel: Float,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "orb_pulse")
@@ -486,13 +476,7 @@ private fun CypherGlowingOrb(
     }
 
     Box(
-        modifier = modifier
-            .size(200.dp)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            ),
+        modifier = modifier.size(200.dp),
         contentAlignment = Alignment.Center
     ) {
         // Outer Glow Ring 1
@@ -562,7 +546,7 @@ private fun CypherGlowingOrb(
                 VoiceState.WAKE_WORD_DETECTED,
                 VoiceState.LISTENING_FOR_COMMAND -> Icons.Default.GraphicEq
                 VoiceState.PROCESSING -> Icons.Default.RecordVoiceOver
-                VoiceState.SPEAKING -> Icons.Default.VolumeUp
+                VoiceState.SPEAKING -> Icons.AutoMirrored.Filled.VolumeUp
                 VoiceState.ERROR -> Icons.Default.Warning
             }
             Icon(
@@ -659,7 +643,7 @@ private fun CypherStatusCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.VolumeUp,
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                             contentDescription = null,
                             tint = CypherGreen,
                             modifier = Modifier
@@ -754,7 +738,7 @@ private fun CommandHistorySection(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No recent activity.\nSay \"Cypher\", \"Jaan\", or \"Baby\", or tap the mic.",
+                        text = "No recent activity.\nSay \"Cypher\", \"Jan\", \"Jaan\", or \"Baby\" to begin.",
                         color = CypherTextMuted,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
@@ -911,7 +895,7 @@ private fun CypherCommandInputBar(
                 )
         ) {
             Icon(
-                imageVector = Icons.Default.Send,
+                imageVector = Icons.AutoMirrored.Filled.Send,
                 contentDescription = "Send",
                 tint = if (text.isNotBlank()) Color.White else CypherTextMuted,
                 modifier = Modifier.size(18.dp)

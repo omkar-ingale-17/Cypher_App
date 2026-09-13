@@ -8,10 +8,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Parses normalized natural-language text into structured [CommandIntent]s.
+ * Deterministic regular expression and keyword-based NLU Engine.
  *
- * Implements rule-based, regex-driven intent classification for deterministic
- * commands (no internet/cloud dependency required). Extensible for cloud LLMs.
+ * Pattern priority is critical:
+ * 1. Conversational greetings and persona intents (exact and leading matches)
+ * 2. Time and Date queries
+ * 3. Specific verbs (call, dial, text, open, youtube, etc.)
+ * 4. General fallbacks (web search, unknown)
  */
 @Singleton
 class CommandIntentEngine @Inject constructor() {
@@ -53,6 +56,19 @@ class CommandIntentEngine @Inject constructor() {
             type = CommandIntentType.GET_USER_NAME,
             patterns = listOf(
                 Regex("""^(?:what\s+is\s+my\s+name|what\'?s\s+my\s+name|who\s+am\s+i|do\s+you\s+know\s+my\s+name)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        // -- Time & Date ------------------------------------------------------
+        IntentMatcher(
+            type = CommandIntentType.GET_TIME,
+            patterns = listOf(
+                Regex("""^(?:what\s+is\s+the\s+time|what\s+time\s+is\s+it|what\'?s\s+the\s+time|tell\s+me\s+the\s+time|current\s+time|time\s+please|can\s+you\s+tell\s+me\s+the\s+time|the\s+time|time)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.GET_DATE,
+            patterns = listOf(
+                Regex("""^(?:what[\s']*s?\s+(?:today[\s']*s?\s+)?date|what\s+is\s+(?:today[\s']*s?\s+)?(?:the\s+)?date|what[\s']*s?\s+the\s+date|what\s+day\s+is\s+(?:today|it)|today[\s']*s?\s+date|date\s+please|tell\s+me\s+the\s+date|date)$""", RegexOption.IGNORE_CASE)
             )
         ),
         IntentMatcher(
@@ -148,24 +164,19 @@ class CommandIntentEngine @Inject constructor() {
             type = CommandIntentType.MEDIA_PLAY,
             patterns = listOf(
                 Regex("""^(?:play|resume|play\s+music|resume\s+music)$""", RegexOption.IGNORE_CASE),
-                Regex("""^(?:play)\s+(.+)$""", RegexOption.IGNORE_CASE)
-            ),
-            paramExtractor = { match ->
-                if (match.groupValues.size > 1 && match.groupValues[1].isNotBlank()) {
-                    mapOf("track" to match.groupValues[1].trim())
-                } else emptyMap()
-            }
+                Regex("""^(?:play\s+song|start\s+music)$""", RegexOption.IGNORE_CASE)
+            )
         ),
         IntentMatcher(
             type = CommandIntentType.MEDIA_PAUSE,
             patterns = listOf(
-                Regex("""^(?:pause|pause\s+music|stop\s+music|stop)$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:pause|pause\s+music|pause\s+song|stop\s+music)$""", RegexOption.IGNORE_CASE)
             )
         ),
         IntentMatcher(
             type = CommandIntentType.MEDIA_NEXT,
             patterns = listOf(
-                Regex("""^(?:next\s+track|next\s+song|skip|next)$""", RegexOption.IGNORE_CASE)
+                Regex("""^(?:next\s+track|next\s+song|next|skip)$""", RegexOption.IGNORE_CASE)
             )
         ),
         IntentMatcher(

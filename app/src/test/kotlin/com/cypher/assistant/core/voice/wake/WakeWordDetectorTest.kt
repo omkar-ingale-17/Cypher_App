@@ -138,4 +138,59 @@ class WakeWordDetectorTest {
         val result = detector.process("   ", requireWakePhrase = true)
         assertEquals(WakePhraseResult.None, result)
     }
+
+    @Test
+    fun test13_detectsWakeWordAtEnd_Cypher() {
+        val word = detector.containsWakeWord("What is the time Cypher")
+        assertEquals("cypher", word)
+
+        val result = detector.process("What is the time Cypher", requireWakePhrase = true)
+        assertTrue(result is WakePhraseResult.WakeWithCommand)
+        val withCmd = result as WakePhraseResult.WakeWithCommand
+        assertEquals("cypher", withCmd.wakeWord)
+        assertEquals("what is the time", withCmd.commandPayload)
+    }
+
+    @Test
+    fun test14_detectsWakeWordAtEnd_Jaan() {
+        val word = detector.containsWakeWord("Tell me a joke jaan")
+        assertEquals("jaan", word)
+
+        val result = detector.process("Tell me a joke jaan", requireWakePhrase = true)
+        assertTrue(result is WakePhraseResult.WakeWithCommand)
+        val withCmd = result as WakePhraseResult.WakeWithCommand
+        assertEquals("jaan", withCmd.wakeWord)
+        assertEquals("tell me a joke", withCmd.commandPayload)
+    }
+
+    @Test
+    fun test15_detectsWakeWordAtEnd_Baby() {
+        val word = detector.containsWakeWord("Play music baby")
+        assertEquals("baby", word)
+
+        val result = detector.process("Play music baby", requireWakePhrase = true)
+        assertTrue(result is WakePhraseResult.WakeWithCommand)
+        val withCmd = result as WakePhraseResult.WakeWithCommand
+        assertEquals("baby", withCmd.wakeWord)
+        assertEquals("play music", withCmd.commandPayload)
+    }
+
+    @Test
+    fun test16_extractWakeWordAndCommandDirect() {
+        val res1 = detector.extractWakeWordAndCommand("cypher what is the time")
+        assertEquals("cypher", res1.wakeWord)
+        assertEquals("what is the time", res1.command)
+
+        val res2 = detector.extractWakeWordAndCommand("what is the time cypher")
+        assertEquals("cypher", res2.wakeWord)
+        assertEquals("what is the time", res2.command)
+
+        val res3 = detector.extractWakeWordAndCommand("cypher")
+        assertEquals("cypher", res3.wakeWord)
+        assertNull(res3.command)
+
+        val res4 = detector.extractWakeWordAndCommand("random words without wake")
+        assertNull(res4.wakeWord)
+        assertNull(res4.command)
+    }
 }

@@ -6,6 +6,9 @@ import com.cypher.assistant.core.command.CommandIntentType
 import com.cypher.assistant.core.command.CommandResult
 import com.cypher.assistant.data.preferences.UserPreferencesDataStore
 import kotlinx.coroutines.flow.first
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,6 +24,8 @@ class ConversationHandler @Inject constructor(
         CommandIntentType.ASSISTANT_CAPABILITIES,
         CommandIntentType.SET_USER_NAME,
         CommandIntentType.GET_USER_NAME,
+        CommandIntentType.GET_TIME,
+        CommandIntentType.GET_DATE,
         CommandIntentType.THANK_YOU,
         CommandIntentType.GOODBYE
     )
@@ -43,7 +48,7 @@ class ConversationHandler @Inject constructor(
             }
 
             CommandIntentType.ASSISTANT_CAPABILITIES -> {
-                CommandResult.success("I can open apps, make calls, send SMS messages, search YouTube, adjust volume and settings, search the web, and chat with you.")
+                CommandResult.success("I can tell you the time and date, open apps, make calls, send SMS messages, search YouTube, adjust volume and settings, search the web, and chat with you.")
             }
 
             CommandIntentType.SET_USER_NAME -> {
@@ -62,6 +67,18 @@ class ConversationHandler @Inject constructor(
                 } else {
                     CommandResult.success("I don't know your name yet. You can tell me by saying 'My name is...', or set it in settings.")
                 }
+            }
+
+            CommandIntentType.GET_TIME -> {
+                val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+                val currentTime = timeFormat.format(Date())
+                CommandResult.success("The time is $currentTime.")
+            }
+
+            CommandIntentType.GET_DATE -> {
+                val dateFormat = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault())
+                val currentDate = dateFormat.format(Date())
+                CommandResult.success("Today is $currentDate.")
             }
 
             CommandIntentType.THANK_YOU -> {
