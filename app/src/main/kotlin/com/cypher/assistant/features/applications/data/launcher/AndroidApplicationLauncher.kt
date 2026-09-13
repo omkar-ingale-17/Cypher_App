@@ -7,7 +7,6 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
@@ -20,8 +19,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Low-level Android application launch and system navigation execution handler.
- * Uses official Android Intent, PackageManager, and AccessibilityService APIs.
+ * Executes Android application launches and navigation intents safely.
+ *
+ * Uses standard Android package-launch Intents with FLAG_ACTIVITY_NEW_TASK
+ * so Android manages application task stacks normally without clearing or killing background tasks.
  */
 @Singleton
 class AndroidApplicationLauncher @Inject constructor(
@@ -29,44 +30,34 @@ class AndroidApplicationLauncher @Inject constructor(
 ) {
 
     companion object {
-        private const val TAG = "CYPHER_APP_LAUNCH"
+        private const val TAG = "CYPHER_APP_LAUNCHER"
     }
 
     /**
-     * Launches the given [appInfo] using its launcher intent.
-     * Supports reliable launching when Cypher is in background/minimized.
+     * Launches a third-party or system application by its [AppInfo].
      */
     fun launch(appInfo: AppInfo): LaunchResult {
-        val packageManager = context.packageManager
+        Log.i(TAG, "Attempting to launch app: ${appInfo.appName} (${appInfo.packageName})")
 
-        try {
+        return try {
+            val packageManager = context.packageManager
             val launchIntent = packageManager.getLaunchIntentForPackage(appInfo.packageName)
-            if (launchIntent == null) {
-                Log.w(TAG, "No launch intent found for package: ${appInfo.packageName}")
-                return LaunchResult.Disabled(
-                    appInfo = appInfo,
-                    message = "I found ${appInfo.appName}, but it cannot be launched directly."
+                ?: return LaunchResult.NotFound(
+                    query = appInfo.appName,
+                    message = "I couldn't find ${appInfo.appName} on this phone."
                 )
-            }
 
-            // Flags to bring target app to front and create a new task
-            launchIntent.addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED or
-                Intent.FLAG_ACTIVITY_CLEAR_TOP
-            )
+            // Ensure proper task flag for launching from service/background without clearing previous tasks
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
             var launchedSuccessfully = false
 
-            // Strategy 1: If Accessibility Service is running, use it to start activity (bypasses BAL restrictions)
-            val accessibilityService = CypherAccessibilityService.instance
-            if (accessibilityService != null) {
-                try {
-                    accessibilityService.startActivity(launchIntent)
+            // Strategy 1: Accessibility Service (Bypasses Android 10+ BAL restrictions if granted)
+            if (CypherAccessibilityService.isServiceRunning()) {
+                val started = CypherAccessibilityService.launchIntent(launchIntent)
+                if (started) {
                     launchedSuccessfully = true
-                    Log.i(TAG, "Launched ${appInfo.appName} via AccessibilityService")
-                } catch (e: Exception) {
-                    Log.w(TAG, "AccessibilityService.startActivity failed, falling back to PendingIntent", e)
+                    Log.i(TAG, "Launched ${appInfo.appName} via CypherAccessibilityService")
                 }
             }
 
@@ -74,20 +65,26 @@ class AndroidApplicationLauncher @Inject constructor(
             if (!launchedSuccessfully) {
                 try {
                     val requestCode = (System.currentTimeMillis() % 10000).toInt()
-                    val pendingIntent = PendingIntent.getActivity(
-                        context,
-                        requestCode,
-                        launchIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                         val options = ActivityOptions.makeBasic().apply {
                             pendingIntentBackgroundActivityStartMode =
                                 ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
                         }.toBundle()
-                        pendingIntent.send(context, 0, null, null, null, null, options)
+                        val pendingIntent = PendingIntent.getActivity(
+                            context,
+                            requestCode,
+                            launchIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                            options
+                        )
+                        pendingIntent.send()
                     } else {
+                        val pendingIntent = PendingIntent.getActivity(
+                            context,
+                            requestCode,
+                            launchIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
                         pendingIntent.send()
                     }
                     launchedSuccessfully = true
@@ -133,7 +130,7 @@ class AndroidApplicationLauncher @Inject constructor(
     }
 
     /**
-     * Navigates to the Home screen using standard Android Intent or AccessibilityService.
+     * Navigates to the Home screen using standard Android Intent and AccessibilityService.
      */
     fun launchHome(): LaunchResult {
         return try {
@@ -142,7 +139,7 @@ class AndroidApplicationLauncher @Inject constructor(
             }
             val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_HOME)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(homeIntent)
             Log.i(TAG, "Successfully navigated to Home screen")
@@ -158,6 +155,24 @@ class AndroidApplicationLauncher @Inject constructor(
                 message = "I couldn't return to the home screen."
             )
         }
+    }
+
+    /**
+     * Performs the Android Back navigation action via AccessibilityService.
+     */
+    fun goBack(): CommandResult {
+        if (CypherAccessibilityService.isServiceRunning()) {
+            val wentBack = CypherAccessibilityService.goBack()
+            if (wentBack) {
+                Log.i(TAG, "Back action performed via CypherAccessibilityService")
+                return CommandResult.success("Going back.")
+            }
+        }
+
+        Log.w(TAG, "Cannot go back: Accessibility Service not enabled")
+        return CommandResult.failure(
+            "To go back across applications, please enable Cypher in your phone's Accessibility Settings."
+        )
     }
 
     /**

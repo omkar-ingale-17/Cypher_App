@@ -13,7 +13,7 @@ import javax.inject.Singleton
 
 /**
  * CommandHandler for Module 2: Application Control & System Navigation.
- * Handles OPEN_APP, CLOSE_APP, MINIMIZE_APP, GO_HOME, LOCK_SCREEN, LIST_APPS, and OPEN_SETTINGS intents.
+ * Handles OPEN_APP, CLOSE_APP, MINIMIZE_APP, GO_HOME, GO_BACK, LOCK_SCREEN, LIST_APPS, and OPEN_SETTINGS intents.
  */
 @Singleton
 class ApplicationCommandHandler @Inject constructor(
@@ -29,6 +29,7 @@ class ApplicationCommandHandler @Inject constructor(
         CommandIntentType.CLOSE_APP,
         CommandIntentType.MINIMIZE_APP,
         CommandIntentType.GO_HOME,
+        CommandIntentType.GO_BACK,
         CommandIntentType.LOCK_SCREEN,
         CommandIntentType.LIST_APPS,
         CommandIntentType.OPEN_SETTINGS
@@ -42,6 +43,7 @@ class ApplicationCommandHandler @Inject constructor(
             CommandIntentType.CLOSE_APP -> handleCloseApp(intent)
             CommandIntentType.MINIMIZE_APP -> handleMinimize(intent)
             CommandIntentType.GO_HOME -> handleGoHome(intent)
+            CommandIntentType.GO_BACK -> handleGoBack(intent)
             CommandIntentType.LOCK_SCREEN -> handleLockScreen(intent)
             CommandIntentType.LIST_APPS -> handleListApps(intent)
             CommandIntentType.OPEN_SETTINGS -> handleOpenSettings(intent)
@@ -51,7 +53,7 @@ class ApplicationCommandHandler @Inject constructor(
 
     private suspend fun handleOpenApp(intent: CommandIntent): CommandResult {
         val appNameQuery = intent.parameters["app_name"]?.trim().orEmpty()
-        Log.i("CYPHER_COMMAND", "[CYPHER_COMMAND] Action: openApplicationByName (\"$appNameQuery\")")
+        Log.i("CYPHER_COMMAND", "[CYPHER_COMMAND] Action: openApplicationByName '$appNameQuery'")
         if (appNameQuery.isBlank()) {
             return CommandResult.failure("Which application would you like me to open?")
         }
@@ -94,7 +96,7 @@ class ApplicationCommandHandler @Inject constructor(
 
     private suspend fun handleCloseApp(intent: CommandIntent): CommandResult {
         val appName = intent.parameters["app_name"]?.trim().orEmpty()
-        Log.i("CYPHER_COMMAND", "[CYPHER_COMMAND] Action: closeApp (\"$appName\")")
+        Log.i("CYPHER_COMMAND", "[CYPHER_COMMAND] Action: closeApp '$appName'")
         return applicationRepository.closeApp(appName)
     }
 
@@ -116,6 +118,11 @@ class ApplicationCommandHandler @Inject constructor(
         }
     }
 
+    private suspend fun handleGoBack(intent: CommandIntent): CommandResult {
+        Log.i("CYPHER_COMMAND", "[CYPHER_COMMAND] Action: goBack (GLOBAL_ACTION_BACK)")
+        return applicationRepository.goBack()
+    }
+
     private suspend fun handleLockScreen(intent: CommandIntent): CommandResult {
         Log.i("CYPHER_COMMAND", "[CYPHER_COMMAND] Action: lockScreen (AccessibilityService / DevicePolicyManager)")
         return applicationRepository.lockScreen()
@@ -130,7 +137,7 @@ class ApplicationCommandHandler @Inject constructor(
 
     private suspend fun handleOpenSettings(intent: CommandIntent): CommandResult {
         val settingType = intent.parameters["setting_type"] ?: "settings"
-        Log.i("CYPHER_COMMAND", "[CYPHER_COMMAND] Action: openSystemScreen (\"$settingType\")")
+        Log.i("CYPHER_COMMAND", "[CYPHER_COMMAND] Action: openSystemScreen '$settingType'")
         val result = applicationRepository.openSystemScreen(settingType)
         return when (result) {
             is LaunchResult.Success -> CommandResult.success(result.message)

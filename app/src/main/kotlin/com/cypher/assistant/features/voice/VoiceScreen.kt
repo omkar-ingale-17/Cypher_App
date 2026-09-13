@@ -1,7 +1,6 @@
 package com.cypher.assistant.features.voice
 
 import com.cypher.assistant.features.applications.presentation.ApplicationScreen
-import com.cypher.assistant.features.youtube.presentation.YouTubeScreen
 
 import android.Manifest
 import android.content.Context
@@ -190,7 +189,6 @@ fun VoiceScreen(
                     wakeWordEnabled = uiState.userPreferences.wakeWordEnabled,
                     onUserClick = { showNameEditDialog = true },
                     onAppsClick = { viewModel.openApplicationsSheet() },
-                    onYouTubeClick = { viewModel.openYouTubeSheet() },
                     onSettingsClick = { viewModel.openSettingsSheet() }
                 )
 
@@ -277,18 +275,6 @@ fun VoiceScreen(
                 )
             }
 
-            // YouTube Control Dialog
-            if (uiState.isYouTubeSheetOpen) {
-                androidx.compose.ui.window.Dialog(
-                    onDismissRequest = { viewModel.closeYouTubeSheet() },
-                    properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-                ) {
-                    YouTubeScreen(
-                        onDismiss = { viewModel.closeYouTubeSheet() }
-                    )
-                }
-            }
-
             // Application Control Dialog
             if (uiState.isApplicationsSheetOpen) {
                 androidx.compose.ui.window.Dialog(
@@ -331,7 +317,6 @@ private fun CypherTopBar(
     wakeWordEnabled: Boolean,
     onUserClick: () -> Unit,
     onAppsClick: () -> Unit,
-    onYouTubeClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -429,22 +414,6 @@ private fun CypherTopBar(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-            }
-
-            IconButton(
-                onClick = onYouTubeClick,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(CypherCardBg)
-                    .border(1.dp, CypherCardBorder, CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "YouTube",
-                    tint = Color(0xFFFF0000),
-                    modifier = Modifier.size(20.dp)
-                )
             }
 
             IconButton(

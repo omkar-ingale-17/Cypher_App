@@ -277,19 +277,22 @@ class VoiceEngine @Inject constructor(
                 // 1. Pre-process & Parse Intent
                 val normalized = intentEngine.preProcessText(commandText)
                 val intent = intentEngine.parse(commandText, source)
+                val extractedAppName = intent.parameters["app_name"] ?: "N/A"
 
                 Log.i("CYPHER_COMMAND", """
-                    [CYPHER_COMMAND]
-                    Recognized: "$commandText"
-                    Normalized: "$normalized"
-                    Intent: ${intent.intentType}
+                    ══════════════════════════════════════════════════════
+                    Recognized text: "$commandText"
+                    Normalized text: "$normalized"
+                    Detected intent: ${intent.intentType}
+                    Extracted app name: $extractedAppName
                     Parameters: ${intent.parameters}
+                    ══════════════════════════════════════════════════════
                 """.trimIndent())
 
                 // 2. Route & Execute Action
                 val result = commandRouter.route(intent)
                 _lastResponse.value = result.message
-                Log.i("CYPHER_COMMAND", "[CYPHER_COMMAND] Action: ${intent.intentType} completed -> \"${result.message}\"")
+                Log.i("CYPHER_COMMAND", "Executed action: ${intent.intentType} -> \"${result.message}\" (success=${result.success})")
 
                 // 3. Persist in database
                 historyRepository.record(intent, result)

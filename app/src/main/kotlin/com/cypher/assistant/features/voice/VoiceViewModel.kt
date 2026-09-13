@@ -39,8 +39,7 @@ data class VoiceUiState(
     val availableLanguages: List<Locale> = emptyList(),
     val isSettingsSheetOpen: Boolean = false,
     val isOnboardingOpen: Boolean = false,
-    val isApplicationsSheetOpen: Boolean = false,
-    val isYouTubeSheetOpen: Boolean = false
+    val isApplicationsSheetOpen: Boolean = false
 )
 
 @HiltViewModel
@@ -157,14 +156,6 @@ class VoiceViewModel @Inject constructor(
         voiceEngine.processTextInput(text)
     }
 
-
-    fun openYouTubeSheet() {
-        _uiState.update { it.copy(isYouTubeSheetOpen = true) }
-    }
-
-    fun closeYouTubeSheet() {
-        _uiState.update { it.copy(isYouTubeSheetOpen = false) }
-    }
 
     fun openApplicationsSheet() {
         _uiState.update { it.copy(isApplicationsSheetOpen = true) }

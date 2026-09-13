@@ -147,6 +147,10 @@ class ApplicationRepositoryImpl @Inject constructor(
         launcher.launchHome()
     }
 
+    override suspend fun goBack(): CommandResult = withContext(Dispatchers.Main) {
+        launcher.goBack()
+    }
+
     override suspend fun lockScreen(): CommandResult = withContext(Dispatchers.Main) {
         launcher.lockScreen()
     }

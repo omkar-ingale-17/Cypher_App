@@ -30,6 +30,9 @@ interface ApplicationRepository {
     /** Minimizes / navigates to the Android Home screen. */
     suspend fun launchHome(): LaunchResult
 
+    /** Performs back navigation. */
+    suspend fun goBack(): CommandResult
+
     /** Locks the device screen using supported Android APIs. */
     suspend fun lockScreen(): CommandResult
 

@@ -14,6 +14,7 @@ import android.view.accessibility.AccessibilityEvent
  * Provides official system-level accessibility actions supported by Android:
  * - GLOBAL_ACTION_LOCK_SCREEN (Android 9+ / API 28+)
  * - GLOBAL_ACTION_HOME
+ * - GLOBAL_ACTION_BACK
  * - GLOBAL_ACTION_RECENTS
  */
 class CypherAccessibilityService : AccessibilityService() {
@@ -43,10 +44,27 @@ class CypherAccessibilityService : AccessibilityService() {
             return service.performGlobalAction(GLOBAL_ACTION_HOME)
         }
 
+        fun goBack(): Boolean {
+            val service = instance ?: return false
+            Log.i(TAG, "Performing GLOBAL_ACTION_BACK via AccessibilityService")
+            return service.performGlobalAction(GLOBAL_ACTION_BACK)
+        }
+
         fun openRecents(): Boolean {
             val service = instance ?: return false
             Log.i(TAG, "Performing GLOBAL_ACTION_RECENTS via AccessibilityService")
             return service.performGlobalAction(GLOBAL_ACTION_RECENTS)
+        }
+
+        fun launchIntent(intent: Intent): Boolean {
+            val service = instance ?: return false
+            return try {
+                service.startActivity(intent)
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch intent via AccessibilityService", e)
+                false
+            }
         }
 
         fun openAccessibilitySettings(context: Context) {
