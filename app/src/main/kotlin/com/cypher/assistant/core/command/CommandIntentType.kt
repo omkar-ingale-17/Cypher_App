@@ -1,4 +1,4 @@
-package com.cypher.assistant.core.command
+﻿package com.cypher.assistant.core.command
 
 /**
  * Exhaustive enumeration of every voice command intent Cypher can process.
@@ -33,9 +33,23 @@ enum class CommandIntentType {
     SEND_SMS,
     READ_SMS,
 
-    // -- YouTube -----------------------------------------------------------
-    YOUTUBE_SEARCH,
-    YOUTUBE_PLAY,
+    // -- YouTube (Module 3) -----------------------------------------------
+    YOUTUBE_SEARCH,          // "search YouTube for X"
+    YOUTUBE_PLAY_SEARCH,     // "play X on YouTube" -> open search for X
+    YOUTUBE_PAUSE,           // "pause YouTube"
+    YOUTUBE_RESUME,          // "resume YouTube"
+    YOUTUBE_STOP,            // "stop YouTube"
+    YOUTUBE_NEXT,            // "next video"
+    YOUTUBE_PREVIOUS,        // "previous video"
+    YOUTUBE_VOLUME_UP,       // "increase YouTube volume"
+    YOUTUBE_VOLUME_DOWN,     // "decrease YouTube volume"
+    YOUTUBE_MUTE,            // "mute YouTube"
+    YOUTUBE_UNMUTE,          // "unmute YouTube"
+    YOUTUBE_OPEN_HOME,       // "open YouTube home"
+    YOUTUBE_OPEN_SHORTS,     // "open YouTube Shorts"
+    YOUTUBE_OPEN_SUBSCRIPTIONS, // "open YouTube subscriptions"
+    YOUTUBE_OPEN_HISTORY,    // "open YouTube history"
+    YOUTUBE_OPEN_CHANNEL,    // "open my YouTube channel"
 
     // -- Media Playback ----------------------------------------------------
     MEDIA_PLAY,

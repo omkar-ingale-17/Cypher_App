@@ -10,13 +10,14 @@ import javax.inject.Singleton
 /**
  * Deterministic regular expression and keyword-based NLU Engine with robust ASR normalization.
  *
- * Pattern priority:
+ * Pattern priority is critical:
  * 1. Conversational greetings and persona intents
  * 2. Time, Date, and status queries
- * 3. System Navigation: MINIMIZE_APP, GO_HOME, LOCK_SCREEN
- * 4. App Control: OPEN_APP, CLOSE_APP, LIST_APPS, OPEN_SETTINGS
- * 5. Specific device verbs (call, dial, sms, youtube, media, volume)
- * 6. General fallbacks (web search, unknown)
+ * 3. System Navigation: MINIMIZE_APP / GO_HOME, LOCK_SCREEN
+ * 4. YouTube Control: YOUTUBE_* (Must precede OPEN_APP to avoid "open youtube shorts" being treated as generic app launch)
+ * 5. App Control: OPEN_APP, CLOSE_APP, LIST_APPS, OPEN_SETTINGS
+ * 6. Specific device verbs (call, dial, sms, media, volume, settings)
+ * 7. General fallbacks (web search, unknown)
  */
 @Singleton
 class CommandIntentEngine @Inject constructor() {
@@ -87,7 +88,7 @@ class CommandIntentEngine @Inject constructor() {
             )
         ),
 
-        // -- System Navigation & Device Control --------------------------------
+        // -- System Navigation & Device Control -------------------------------
         IntentMatcher(
             type = CommandIntentType.MINIMIZE_APP,
             patterns = listOf(
@@ -109,6 +110,113 @@ class CommandIntentEngine @Inject constructor() {
             )
         ),
 
+        // -- YouTube Control (Module 3) - Precedes general app matchers --------
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_OPEN_HOME,
+            patterns = listOf(
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:open|go\s+to|show|launch)\s+youtube\s+home(?:\s+(?:for\s+me|please))?$""", RegexOption.IGNORE_CASE),
+                Regex("""^youtube\s+home$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_OPEN_SHORTS,
+            patterns = listOf(
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:open|show|go\s+to|launch)\s+(?:the\s+|my\s+)?(?:youtube\s+)?shorts(?:\s+(?:for\s+me|please))?$""", RegexOption.IGNORE_CASE),
+                Regex("""^(?:youtube\s+)?shorts$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_OPEN_SUBSCRIPTIONS,
+            patterns = listOf(
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:open|show|go\s+to|launch)\s+(?:the\s+|my\s+)?(?:youtube\s+)?(?:subscriptions|subs)(?:\s+(?:for\s+me|please))?$""", RegexOption.IGNORE_CASE),
+                Regex("""^(?:my\s+)?(?:youtube\s+)?(?:subscriptions|subs)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_OPEN_HISTORY,
+            patterns = listOf(
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:open|show|go\s+to|launch)\s+(?:the\s+|my\s+)?(?:youtube\s+)?(?:watch\s+)?history(?:\s+(?:for\s+me|please))?$""", RegexOption.IGNORE_CASE),
+                Regex("""^(?:my\s+)?(?:youtube\s+)?(?:watch\s+)?history$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_OPEN_CHANNEL,
+            patterns = listOf(
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:open|show|go\s+to|launch)\s+(?:the\s+|my\s+)?(?:youtube\s+)?channel(?:\s+(?:for\s+me|please))?$""", RegexOption.IGNORE_CASE),
+                Regex("""^(?:my\s+)?(?:youtube\s+)?channel$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_PAUSE,
+            patterns = listOf(
+                Regex("""^(?:pause\s+youtube|pause\s+(?:the\s+)?video|pause\s+playback)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_RESUME,
+            patterns = listOf(
+                Regex("""^(?:resume\s+youtube|unpause\s+youtube|resume\s+(?:the\s+)?video|continue\s+(?:the\s+)?video|continue\s+playing)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_STOP,
+            patterns = listOf(
+                Regex("""^(?:stop\s+youtube|stop\s+(?:the\s+)?video|stop\s+playback)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_NEXT,
+            patterns = listOf(
+                Regex("""^(?:next\s+video|next\s+youtube\s+video|skip\s+video|skip\s+to\s+next\s+video|play\s+next\s+video)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_PREVIOUS,
+            patterns = listOf(
+                Regex("""^(?:previous\s+video|previous\s+youtube\s+video|play\s+previous\s+video|go\s+back\s+video|last\s+video)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_VOLUME_UP,
+            patterns = listOf(
+                Regex("""^(?:increase\s+youtube\s+volume|turn\s+up\s+youtube|volume\s+up\s+youtube|youtube\s+volume\s+up|louder\s+youtube)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_VOLUME_DOWN,
+            patterns = listOf(
+                Regex("""^(?:decrease\s+youtube\s+volume|turn\s+down\s+youtube|volume\s+down\s+youtube|youtube\s+volume\s+down|lower\s+youtube\s+volume|quieter\s+youtube)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_MUTE,
+            patterns = listOf(
+                Regex("""^(?:mute\s+youtube|youtube\s+mute|silence\s+youtube)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_UNMUTE,
+            patterns = listOf(
+                Regex("""^(?:unmute\s+youtube|youtube\s+unmute)$""", RegexOption.IGNORE_CASE)
+            )
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_PLAY_SEARCH,
+            patterns = listOf(
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:play|start)\s+(.+?)\s+(?:on\s+youtube|in\s+youtube|from\s+youtube)(?:\s+(?:for\s+me|please))?$""", RegexOption.IGNORE_CASE),
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:play|start)\s+(?:on\s+youtube|in\s+youtube|from\s+youtube|youtube)\s+(.+?)(?:\s+(?:for\s+me|please))?$""", RegexOption.IGNORE_CASE)
+            ),
+            paramExtractor = { match -> mapOf("query" to match.groupValues[1].trim()) }
+        ),
+        IntentMatcher(
+            type = CommandIntentType.YOUTUBE_SEARCH,
+            patterns = listOf(
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:search|find|look\s+up)\s+(?:for\s+)?(.+?)\s+(?:on\s+youtube|in\s+youtube)(?:\s+(?:for\s+me|please))?$""", RegexOption.IGNORE_CASE),
+                Regex("""^(?:can\s+you\s+|could\s+you\s+|please\s+)?(?:search\s+youtube\s+for|search\s+on\s+youtube\s+for|search\s+on\s+youtube|search\s+youtube|find\s+on\s+youtube|youtube\s+search)\s+(.+?)(?:\s+(?:for\s+me|please))?$""", RegexOption.IGNORE_CASE)
+            ),
+            paramExtractor = { match -> mapOf("query" to match.groupValues[1].trim()) }
+        ),
+
         // -- System Settings & Navigation -------------------------------------
         IntentMatcher(
             type = CommandIntentType.OPEN_SETTINGS,
@@ -119,7 +227,7 @@ class CommandIntentEngine @Inject constructor() {
             paramExtractor = { mapOf("setting_type" to "settings") }
         ),
 
-        // -- Apps Control -----------------------------------------------------
+        // -- Apps Control (Module 2) ------------------------------------------
         IntentMatcher(
             type = CommandIntentType.LIST_APPS,
             patterns = listOf(
@@ -191,25 +299,7 @@ class CommandIntentEngine @Inject constructor() {
             }
         ),
 
-        // -- YouTube ----------------------------------------------------------
-        IntentMatcher(
-            type = CommandIntentType.YOUTUBE_PLAY,
-            patterns = listOf(
-                Regex("""^(?:play)\s+(.+)\s+(?:on\s+youtube)$""", RegexOption.IGNORE_CASE),
-                Regex("""^(?:play\s+on\s+youtube)\s+(.+)$""", RegexOption.IGNORE_CASE)
-            ),
-            paramExtractor = { match -> mapOf("query" to match.groupValues[1].trim()) }
-        ),
-        IntentMatcher(
-            type = CommandIntentType.YOUTUBE_SEARCH,
-            patterns = listOf(
-                Regex("""^(?:search\s+youtube\s+for|search\s+on\s+youtube)\s+(.+)$""", RegexOption.IGNORE_CASE),
-                Regex("""^(?:youtube)\s+(.+)$""", RegexOption.IGNORE_CASE)
-            ),
-            paramExtractor = { match -> mapOf("query" to match.groupValues[1].trim()) }
-        ),
-
-        // -- Media Playback ---------------------------------------------------
+        // -- Generic Media Playback -------------------------------------------
         IntentMatcher(
             type = CommandIntentType.MEDIA_PLAY,
             patterns = listOf(
@@ -236,7 +326,7 @@ class CommandIntentEngine @Inject constructor() {
             )
         ),
 
-        // -- Volume Control ---------------------------------------------------
+        // -- Generic Volume Control -------------------------------------------
         IntentMatcher(
             type = CommandIntentType.VOLUME_UP,
             patterns = listOf(
@@ -318,7 +408,7 @@ class CommandIntentEngine @Inject constructor() {
             .replace(Regex("""\btoday's\b""", RegexOption.IGNORE_CASE), "today")
 
         // 2. Remove punctuation marks
-        text = text.replace(Regex("""[,.?!:;\\-_"']+"""), " ")
+        text = text.replace(Regex("""[,.?!:;\-_"']+"""), " ")
         text = text.replace(Regex("""\s+"""), " ").trim()
 
         // 3. Strip leading / trailing wake words and prefixes
@@ -359,6 +449,7 @@ class CommandIntentEngine @Inject constructor() {
             Regex("""\bscreen locker\b""", RegexOption.IGNORE_CASE) to "lock screen",
             Regex("""\bscreen lock\b""", RegexOption.IGNORE_CASE) to "lock screen",
             Regex("""\byou tube\b""", RegexOption.IGNORE_CASE) to "youtube",
+            Regex("""\byou-tube\b""", RegexOption.IGNORE_CASE) to "youtube",
             Regex("""\bwhat\s+s\s+app\b""", RegexOption.IGNORE_CASE) to "whatsapp",
             Regex("""\bwhats\s+app\b""", RegexOption.IGNORE_CASE) to "whatsapp",
             Regex("""\bface\s+book\b""", RegexOption.IGNORE_CASE) to "facebook",

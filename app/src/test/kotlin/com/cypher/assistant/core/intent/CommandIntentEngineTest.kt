@@ -44,6 +44,61 @@ class CommandIntentEngineTest {
     }
 
     @Test
+    fun parsesYouTubeSearchCommands() {
+        val variations = listOf(
+            "Cypher search YouTube for Python tutorials",
+            "search on YouTube for Kotlin compose",
+            "search YouTube for lo fi music",
+            "find on YouTube cute cats"
+        )
+        for (v in variations) {
+            val intent = intentEngine.parse(v, CommandSource.VOICE)
+            assertEquals("Failed for variation: $v", CommandIntentType.YOUTUBE_SEARCH, intent.intentType)
+        }
+    }
+
+    @Test
+    fun parsesYouTubePlayCommands() {
+        val variations = listOf(
+            "Cypher play Bohemian Rhapsody on YouTube",
+            "play on YouTube classical music",
+            "play Naruto opening on YouTube",
+            "play on YouTube jazz"
+        )
+        for (v in variations) {
+            val intent = intentEngine.parse(v, CommandSource.VOICE)
+            assertEquals("Failed for variation: $v", CommandIntentType.YOUTUBE_PLAY_SEARCH, intent.intentType)
+        }
+    }
+
+    @Test
+    fun parsesYouTubeSectionCommands() {
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_SHORTS, intentEngine.parse("open YouTube Shorts", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_SHORTS, intentEngine.parse("shorts", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_SUBSCRIPTIONS, intentEngine.parse("open YouTube subscriptions", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_SUBSCRIPTIONS, intentEngine.parse("my subscriptions", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_HISTORY, intentEngine.parse("open watch history", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_HISTORY, intentEngine.parse("youtube history", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_CHANNEL, intentEngine.parse("open my channel", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_OPEN_HOME, intentEngine.parse("open YouTube home", CommandSource.VOICE).intentType)
+    }
+
+    @Test
+    fun parsesYouTubeMediaControls() {
+        assertEquals(CommandIntentType.YOUTUBE_PAUSE, intentEngine.parse("pause YouTube", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_PAUSE, intentEngine.parse("pause the video", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_RESUME, intentEngine.parse("resume YouTube", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_STOP, intentEngine.parse("stop YouTube", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_NEXT, intentEngine.parse("next video", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_NEXT, intentEngine.parse("skip video", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_PREVIOUS, intentEngine.parse("previous video", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_VOLUME_UP, intentEngine.parse("increase YouTube volume", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_VOLUME_DOWN, intentEngine.parse("decrease YouTube volume", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_MUTE, intentEngine.parse("mute YouTube", CommandSource.VOICE).intentType)
+        assertEquals(CommandIntentType.YOUTUBE_UNMUTE, intentEngine.parse("unmute YouTube", CommandSource.VOICE).intentType)
+    }
+
+    @Test
     fun parsesMinimizeCommandsAndAsrVariations() {
         val variations = listOf(
             "Cypher minimize",
@@ -179,7 +234,7 @@ class CommandIntentEngineTest {
     @Test
     fun parsesPlayOnYouTubeCommand() {
         val intent = intentEngine.parse("play classical music on youtube", CommandSource.VOICE)
-        assertEquals(CommandIntentType.YOUTUBE_PLAY, intent.intentType)
+        assertEquals(CommandIntentType.YOUTUBE_PLAY_SEARCH, intent.intentType)
         assertEquals("classical music", intent.parameters["query"])
     }
 

@@ -60,7 +60,7 @@ class CommandRouterTest {
         val router = CommandRouter(setOf(appHandler))
 
         val intent = CommandIntent(
-            intentType = CommandIntentType.YOUTUBE_PLAY,
+            intentType = CommandIntentType.SET_ALARM,
             parameters = emptyMap(),
             rawText = "play jazz",
             confidence = 0.9f,
