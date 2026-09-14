@@ -107,7 +107,7 @@ class AndroidTTSEngine @Inject constructor(
             }
 
             val audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build()
             engine.setAudioAttributes(audioAttributes)

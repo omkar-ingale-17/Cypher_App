@@ -209,13 +209,8 @@ class VoiceAssistantService : Service(), AudioManager.OnAudioFocusChangeListener
                 return@launch
             }
 
-            val focusGranted = requestAudioFocus()
-            if (focusGranted && !serviceStopped) {
-                Log.d(TAG, "CYPHER_VOICE: Starting voice service listening loop")
-                voiceEngine.startListening(requireWakePhrase = prefs.wakeWordEnabled)
-            } else {
-                Log.w(TAG, "CYPHER_VOICE: Audio focus request rejected by system")
-            }
+            Log.d(TAG, "CYPHER_VOICE: Starting voice service listening loop")
+            voiceEngine.startListening(requireWakePhrase = prefs.wakeWordEnabled)
         }
     }
 

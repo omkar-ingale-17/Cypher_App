@@ -280,13 +280,13 @@ class VoiceEngine @Inject constructor(
                 val extractedAppName = intent.parameters["app_name"] ?: "N/A"
 
                 Log.i("CYPHER_COMMAND", """
-                    ══════════════════════════════════════════════════════
+                    ======================================================
                     Recognized text: "$commandText"
                     Normalized text: "$normalized"
                     Detected intent: ${intent.intentType}
                     Extracted app name: $extractedAppName
                     Parameters: ${intent.parameters}
-                    ══════════════════════════════════════════════════════
+                    ======================================================
                 """.trimIndent())
 
                 // 2. Route & Execute Action

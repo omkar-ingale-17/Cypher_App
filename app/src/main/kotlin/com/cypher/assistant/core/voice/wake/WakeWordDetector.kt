@@ -166,13 +166,25 @@ class WakeWordDetector @Inject constructor() {
     /**
      * Strips leading/trailing conversational filler words and punctuation.
      */
+    /**
+     * Strips leading/trailing conversational filler words and punctuation.
+     * Preserves standalone greeting commands (e.g. "hello", "hi").
+     */
     private fun cleanFillers(text: String): String {
+        val norm = text.trim().lowercase(Locale.ROOT)
+        if (norm in listOf("hello", "hi", "hey", "greetings", "namaste")) {
+            return norm
+        }
+
         var result = text.trim()
 
-        // Strip leading prefixes if any left (e.g. "hey")
+        // Strip leading prefixes if followed by other command words
         for (prefix in prefixModifiers) {
-            val prefixRegex = Regex("""^(?:$prefix)\b[\s,\.\?!:;-]*""", RegexOption.IGNORE_CASE)
-            result = prefixRegex.replace(result, "")
+            val prefixRegex = Regex("""^(?:$prefix)\b[\s,\.\?!:;-]+(.+)$""", RegexOption.IGNORE_CASE)
+            val match = prefixRegex.find(result)
+            if (match != null) {
+                result = match.groupValues[1].trim()
+            }
         }
 
         // Strip leading/trailing suffixes (e.g. "please", "listen")
@@ -186,9 +198,6 @@ class WakeWordDetector @Inject constructor() {
         return result.trim(' ', ',', '.', '?', '!', ':', ';', '-')
     }
 
-    /**
-     * Map variations (e.g. "cipher", "jann") to their canonical wake word representation.
-     */
     fun canonicalizeWakeWord(word: String): String {
         return when (word.lowercase(Locale.ROOT)) {
             "cipher", "cypher" -> "cypher"
